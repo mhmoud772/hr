@@ -1,0 +1,16 @@
+[Unit]
+Description=HR Companion Backend (Gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/hr-companion/backend
+EnvironmentFile=/opt/hr-companion/backend/.env
+ExecStart=/opt/hr-companion/backend/.venv/bin/gunicorn -c /opt/hr-companion/backend/gunicorn.conf.py config.wsgi:application
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
