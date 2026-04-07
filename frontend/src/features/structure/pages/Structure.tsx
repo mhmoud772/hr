@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
-import { Building2, Plus, Search } from "lucide-react";
+import { Building2, Plus, Network, List } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { DepartmentFormDialog } from "@/features/structure/components/DepartmentFormDialog";
 import { DepartmentTreeItem } from "@/features/structure/components/DepartmentTreeItem";
+import { OrgChart } from "@/features/structure/components/OrgChart";
 import { DeleteConfirmDialog } from "@/shared/components/DeleteConfirmDialog";
 import { EmptyState } from "@/shared/components/EmptyState";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { useToast } from "@/shared/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import type { Department } from "@/types/api";
+import type { Department, Employee } from "@/types/api";
 import {
   useCreateDepartment,
   useDeleteDepartment,
@@ -26,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/ui/select";
+import { PageHero } from "@/shared/components/PageHero";
+import { TableToolbar } from "@/shared/components/TableToolbar";
 
 type TreeDepartment = Department & { children?: TreeDepartment[] };
 
@@ -134,10 +137,11 @@ export default function Structure() {
     parentId: "none",
   });
   const [search, setSearch] = useState("");
-  const isRtl = i18n.language === "ar";
   const [managerFilter, setManagerFilter] = useState("all");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "chart">("list");
+  const [selectedEmployee, setSelectedEmployee] = useState<null | Employee>(null);
 
   const canManage = ["system_admin", "admin", "hr_manager"].includes(
     String(user?.role || ""),
@@ -416,43 +420,98 @@ export default function Structure() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("structure_title")}</h1>
-          <p className="text-muted-foreground">{t("structure_subtitle")}</p>
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("structure_title")}
+        subtitle={t("structure_subtitle")}
+        icon={Building2}
+        actions={
+      <div className="flex items-center gap-2">
+        {/* View toggle */}
+        <div className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5 bg-muted/40">
+          <button
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
+              viewMode === "list"
+                ? "bg-background shadow-sm text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <List className="w-4 h-4" />
+            {t("structure_list_view")}
+          </button>
+          <button
+            onClick={() => setViewMode("chart")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-all ${
+              viewMode === "chart"
+                ? "bg-background shadow-sm text-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Network className="w-4 h-4" />
+            {t("structure_chart_view")}
+          </button>
         </div>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className={`w-4 h-4 absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-muted-foreground`} />
-            <Input
-              className={`${isRtl ? "pr-9" : "pl-9"} w-56`}
-              placeholder={t("search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Select value={managerFilter} onValueChange={setManagerFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder={t("department_manager")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("status_all")}</SelectItem>
-              {managerOptions.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => handleAdd()} disabled={!canManage}>
-            <Plus className="w-4 h-4 ml-2" />
-            {t("add_department")}
-          </Button>
-        </div>
+        <Button onClick={() => handleAdd()} disabled={!canManage} className="gap-2">
+          <Plus className="w-4 h-4" />
+          {t("add_department")}
+        </Button>
       </div>
+        }
+      />
 
-      <Card className="bg-card border-none shadow-sm">
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
+        <CardContent className="p-4">
+          <TableToolbar
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: t("search"),
+            }}
+            filters={
+              <Select value={managerFilter} onValueChange={setManagerFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder={t("department_manager")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("status_all")}</SelectItem>
+                  {managerOptions.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/* ── Visual Org Chart ── */}
+      {viewMode === "chart" && (
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Network className="w-5 h-5 text-primary" />
+              {t("structure_visual_chart")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-hidden rounded-b-xl">
+            <OrgChart
+              departments={departments}
+              employees={employeesQuery.data?.results ?? []}
+              onDepartmentClick={(dept) => handleEdit(dept)}
+              onEmployeeClick={(emp) => {
+                /* navigate or open employee details */
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── List / Tree View ── */}
+      {viewMode === "list" && (
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="w-5 h-5 text-primary" />
@@ -486,6 +545,7 @@ export default function Structure() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <DepartmentFormDialog
         open={formOpen}
@@ -510,4 +570,5 @@ export default function Structure() {
     </div>
   );
 }
+
 

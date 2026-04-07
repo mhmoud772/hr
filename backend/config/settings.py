@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
+import warnings
 from pathlib import Path
 from datetime import timedelta
 import sentry_sdk
@@ -21,6 +23,13 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+RUNNING_TESTS = "test" in sys.argv
+REDIS_CACHE_URL = os.getenv("REDIS_CACHE_URL", "").strip()
+FORCE_MEMORY_INFRA = os.getenv(
+    "DJANGO_FORCE_MEMORY_INFRA",
+    "true" if RUNNING_TESTS else "false",
+).lower() == "true"
+USE_REDIS_INFRA = bool(REDIS_CACHE_URL) and not FORCE_MEMORY_INFRA
 
 
 # Quick-start development settings - unsuitable for production
@@ -32,13 +41,33 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 
+_WEAK_SECRET_KEY_VALUES = {
+    "",
+    "change-me",
+    "dev-secret-key",
+    "django-insecure-change-me",
+    "replace-with-a-strong-secret",
+}
+_weak_secret_key = SECRET_KEY.strip().lower() in _WEAK_SECRET_KEY_VALUES or len(SECRET_KEY.strip()) < 32
+if _weak_secret_key and not DEBUG:
+    raise RuntimeError(
+        "Insecure DJANGO_SECRET_KEY detected while DJANGO_DEBUG=false. "
+        "Use a strong random key (>= 32 chars)."
+    )
+if _weak_secret_key and DEBUG:
+    warnings.warn(
+        "Weak DJANGO_SECRET_KEY is being used in development. "
+        "Generate a strong key before production.",
+        RuntimeWarning,
+    )
+
 ALLOWED_HOSTS = [host.strip() for host in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
 if not DEBUG and ("*" in ALLOWED_HOSTS or not ALLOWED_HOSTS):
     raise RuntimeError("DJANGO_ALLOWED_HOSTS must be set for production and cannot be '*'.")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-USE_HTTPS = os.getenv("DJANGO_USE_HTTPS", "false").lower() == "true"
-USE_X_FORWARDED_PROTO = os.getenv("DJANGO_USE_X_FORWARDED_PROTO", "false").lower() == "true"
+USE_HTTPS = os.getenv("DJANGO_USE_HTTPS", "true" if not DEBUG else "false").lower() == "true"
+USE_X_FORWARDED_PROTO = os.getenv("DJANGO_USE_X_FORWARDED_PROTO", "true" if not DEBUG else "false").lower() == "true"
 
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND") or (
     "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
@@ -54,6 +83,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "no-reply@hr-companion.loca
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -64,8 +94,15 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "drf_spectacular",
-    "rest_framework_simplejwt.token_blacklist",
-    "apps.core",
+    'rest_framework_simplejwt.token_blacklist',
+    'apps.system',
+    'apps.authentication',
+    'apps.employees',
+    'apps.attendance',
+    'apps.devices',
+    'apps.reports',
+    'apps.notifications',
+    'apps.ai',
 ]
 
 MIDDLEWARE = [
@@ -75,7 +112,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    "apps.core.middleware.CurrentUserMiddleware",
+    "shared.middleware.CurrentUserMiddleware",
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -98,21 +135,64 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channel Layers
+if USE_REDIS_INFRA:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_CACHE_URL],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# افتراضيًا Postgres، ويمكن التحويل إلى SQLite بوضع DB_ENGINE=sqlite في البيئة.
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "hr_db"),
-        "USER": os.getenv("POSTGRES_USER", "hr_user"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "hr_password"),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+DB_ENGINE = os.getenv("DB_ENGINE", "postgres").lower()
+SQLITE_DB_NAME = os.getenv("SQLITE_DB_NAME", "").strip()
+
+if DB_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": SQLITE_DB_NAME or (BASE_DIR / "db.sqlite3"),
+        },
+        "analytical": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "analytical.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "hr_db"),
+            "USER": os.getenv("POSTGRES_USER", "hr_user"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "hr_password"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        },
+        "analytical": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("ANALYTICAL_DB_NAME", "hr_analytics"),
+            "USER": os.getenv("ANALYTICAL_DB_USER", "hr_user"),
+            "PASSWORD": os.getenv("ANALYTICAL_DB_PASSWORD", "hr_password"),
+            "HOST": os.getenv("ANALYTICAL_DB_HOST", "localhost"),
+            "PORT": os.getenv("ANALYTICAL_DB_PORT", "5433"),
+        }
+    }
+
+DATABASE_ROUTERS = ['config.db_routers.AnalyticalRouter']
 
 
 # Password validation
@@ -139,7 +219,10 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Runtime timezone used by Django (UI timestamps, scheduled tasks, and defaults).
+TIME_ZONE = os.getenv("APP_TIME_ZONE", "UTC")
+# Optional timezone used only when issuing biometric sync-time commands.
+DEVICE_SYNC_TIME_ZONE = os.getenv("DEVICE_SYNC_TIME_ZONE", TIME_ZONE)
 
 USE_I18N = True
 
@@ -158,7 +241,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-AUTH_USER_MODEL = "core.User"
+AUTH_USER_MODEL = "authentication.User"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -180,36 +263,130 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "HR Companion API",
-    "DESCRIPTION": "API documentation for HR Companion backend.",
+    "DESCRIPTION": "API documentation for the HR Companion system, covering employees, attendance, devices, and more.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "SERVE_AUTHENTICATION": ["rest_framework.authentication.SessionAuthentication"],
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+    },
+    "ENUM_NAME_OVERRIDES": {
+        "DeviceStatusEnum": "apps.devices.models.Device.STATUS_CHOICES",
+        "DeviceCommandStatusEnum": "apps.devices.models.DeviceSyncLog.STATUS_CHOICES",
+        "RolloutStatusEnum": "apps.devices.models.DeviceFirmwareRollout.STATUS_CHOICES",
+        "BackupScopeEnum": "apps.devices.models.DeviceBackupSnapshot.SCOPE_CHOICES",
+        "UserRoleEnum": "apps.authentication.models.User.ROLE_CHOICES",
+    },
 }
 
 SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_MINUTES", "15"))),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS", "7"))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_MINUTES") or "15")),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_DAYS") or "7")),
     "UPDATE_LAST_LOGIN": True,
 }
+
+RATELIMIT_ENABLE = os.getenv("RATELIMIT_ENABLE", "false" if RUNNING_TESTS else "true").lower() == "true"
+
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "true" if DEBUG else "false").lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "false").lower() == "true"
+if CELERY_TASK_ALWAYS_EAGER:
+    CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "memory://localhost/")
+    CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "cache+memory://")
+else:
+    CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT") or "300")
+CELERY_BEAT_SCHEDULE = {
+    "task-nightly-backup": {
+        "task": "apps.system.tasks.task_nightly_backup",
+        "schedule": timedelta(hours=24), # Run every 24 hours
+    },
+    "task-analytical-etl": {
+        "task": "apps.reports.tasks.task_run_analytical_etl",
+        "schedule": timedelta(hours=24), # Run daily for snapshotting
+    },
+    "task-device-health-monitor": {
+        "task": "apps.devices.tasks.task_monitor_device_health",
+        "schedule": timedelta(minutes=5),
+    },
+}
+DEVICE_TIME_SYNC_ENABLED = os.getenv("DEVICE_TIME_SYNC_ENABLED", "false").lower() == "true"
+try:
+    DEVICE_TIME_SYNC_INTERVAL_MINUTES = int(os.getenv("DEVICE_TIME_SYNC_INTERVAL_MINUTES", "0"))
+except ValueError:
+    DEVICE_TIME_SYNC_INTERVAL_MINUTES = 0
+if DEVICE_TIME_SYNC_ENABLED and DEVICE_TIME_SYNC_INTERVAL_MINUTES > 0:
+    CELERY_BEAT_SCHEDULE["scheduled-device-sync-time"] = {
+        "task": "apps.system.tasks.run_scheduled_device_time_sync_task",
+        "schedule": timedelta(minutes=DEVICE_TIME_SYNC_INTERVAL_MINUTES),
+    }
+
+if USE_REDIS_INFRA:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_CACHE_URL,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "hr-companion-default-cache",
+        }
+    }
+
+DEVICE_HEARTBEAT_TIMEOUT_SECONDS = int(os.getenv("DEVICE_HEARTBEAT_TIMEOUT_SECONDS") or "180")
+DEVICE_ALERT_COOLDOWN_SECONDS = int(os.getenv("DEVICE_ALERT_COOLDOWN_SECONDS") or "300")
+DEVICE_FAILURE_ALERT_THRESHOLD = int(os.getenv("DEVICE_FAILURE_ALERT_THRESHOLD") or "3")
+DEVICE_FAILURE_ALERT_WINDOW_MINUTES = int(os.getenv("DEVICE_FAILURE_ALERT_WINDOW_MINUTES") or "30")
+DEVICE_INACTIVE_DAYS = int(os.getenv("DEVICE_INACTIVE_DAYS") or "7")
+DEVICE_COMMAND_REQUIRES_APPROVAL = os.getenv("DEVICE_COMMAND_REQUIRES_APPROVAL", "true").lower() == "true"
+DEVICE_COMMAND_APPROVAL_TTL_MINUTES = int(os.getenv("DEVICE_COMMAND_APPROVAL_TTL_MINUTES") or "30")
+DEVICE_INLINE_TASK_FALLBACK_ON_QUEUE_ERROR = os.getenv(
+    "DEVICE_INLINE_TASK_FALLBACK_ON_QUEUE_ERROR",
+    "true",
+).lower() == "true"
+DEVICE_USER_DISPLAY_NAME_MODE = os.getenv("DEVICE_USER_DISPLAY_NAME_MODE", "employee_code").strip().lower()
+COMM_KEY_ENCRYPTION_KEY = os.getenv("COMM_KEY_ENCRYPTION_KEY", "")
+ADMS_SHARED_SECRET = os.getenv("ADMS_SHARED_SECRET", "")
+ADMS_AUTO_REGISTER = os.getenv("ADMS_AUTO_REGISTER", "true").lower() == "true"
+ADMS_COMMAND_QUEUE_TTL_SECONDS = int(os.getenv("ADMS_COMMAND_QUEUE_TTL_SECONDS") or "604800")
+ADMS_ALLOWED_IPS = [
+    ip.strip()
+    for ip in os.getenv("ADMS_ALLOWED_IPS", "").split(",")
+    if ip.strip()
+]
+NOTIFICATION_SMS_WEBHOOK_URL = os.getenv("NOTIFICATION_SMS_WEBHOOK_URL", "")
+NOTIFICATION_PUSH_WEBHOOK_URL = os.getenv("NOTIFICATION_PUSH_WEBHOOK_URL", "")
+NOTIFICATION_WEBHOOK_BEARER_TOKEN = os.getenv("NOTIFICATION_WEBHOOK_BEARER_TOKEN", "")
+NOTIFICATION_WEBHOOK_TIMEOUT_SECONDS = int(os.getenv("NOTIFICATION_WEBHOOK_TIMEOUT_SECONDS") or "10")
 
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "CORS_ALLOWED_ORIGINS",
-        f"{FRONTEND_URL},http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080",
+        f"{FRONTEND_URL},http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if origin.strip()
 ]
 
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true" and DEBUG
+# In development, allow any localhost port automatically (Vite picks a free port)
+CORS_ALLOW_ALL_ORIGINS = DEBUG and os.getenv("CORS_ALLOW_ALL_ORIGINS", "true").lower() == "true"
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "CSRF_TRUSTED_ORIGINS",
-        f"{FRONTEND_URL},http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080",
+        f"{FRONTEND_URL},http://localhost:5173,http://127.0.0.1:5173",
     ).split(",")
     if origin.strip()
 ]
@@ -219,7 +396,8 @@ CSRF_COOKIE_SECURE = USE_HTTPS
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_AGE = int(os.getenv("SESSION_COOKIE_AGE", str(60 * 60 * 24 * 7)))
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = True
+CSRF_USE_SESSIONS = False
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if USE_X_FORWARDED_PROTO else None
 SECURE_SSL_REDIRECT = USE_HTTPS
@@ -229,6 +407,7 @@ SECURE_HSTS_PRELOAD = USE_HTTPS
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_BROWSER_XSS_FILTER = True
 
 LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO")
 LOGGING = {
@@ -253,5 +432,14 @@ if SENTRY_DSN:
         integrations=[DjangoIntegration()],
         environment=os.getenv("SENTRY_ENV", "production" if not DEBUG else "development"),
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.01")),
         send_default_pii=True,
     )
+    sentry_sdk.set_tag("app_name", "hr-companion-backend")
+
+# ─── AI / LLM Configuration ────────────────────────────────────────────────
+# Set these three variables in your .env file to activate live AI responses.
+# Without AI_API_KEY, the system falls back to safe mock responses.
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")         # "openai" | "google"
+AI_API_KEY  = os.getenv("AI_API_KEY", None)               # your secret key
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME", None)          # optional: override default model

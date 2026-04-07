@@ -3,10 +3,12 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/shared/hooks/use-toast";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { EmptyState } from "@/shared/components/EmptyState";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, GraduationCap, CheckCircle2, Clock, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { PageHero } from "@/shared/components/PageHero";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { DatePicker } from "@/shared/ui/date-picker";
 import { Label } from "@/shared/ui/label";
 import {
   Dialog,
@@ -33,6 +35,7 @@ import {
 import { useEmployeesQuery } from "@/features/employees/hooks/useEmployees";
 import { useTrainingQuery, useCreateTraining, useUpdateTraining, useDeleteTraining } from "@/features/training/hooks/useTraining";
 import type { TrainingRecord } from "@/types/api";
+import type { ApiTrainingRecordRequest, ApiPatchedTrainingRecordRequest } from "@/types/contracts";
 
 const trainingStatuses = ["planned", "in_progress", "completed", "cancelled"];
 
@@ -91,10 +94,19 @@ export default function Training() {
       return;
     }
     try {
+      const payload: ApiTrainingRecordRequest = {
+        employee: parseInt(formData.employeeId, 10),
+        title: formData.title,
+        provider: formData.provider || undefined,
+        start_date: formData.start_date || undefined,
+        end_date: formData.end_date || undefined,
+        status: formData.status,
+        notes: formData.notes || undefined,
+      };
       if (selected?.id) {
-        await updateTraining.mutateAsync({ id: selected.id, data: formData });
+        await updateTraining.mutateAsync({ id: selected.id, data: payload as ApiPatchedTrainingRecordRequest });
       } else {
-        await createTraining.mutateAsync(formData);
+        await createTraining.mutateAsync(payload);
       }
       setFormOpen(false);
     } catch {
@@ -110,17 +122,52 @@ export default function Training() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("training_title")}</h1>
-          <p className="text-muted-foreground">{t("training_subtitle")}</p>
-        </div>
-        <Button onClick={openAdd}>{t("add")}</Button>
-      </div>
+  const totalTraining = query.data?.length || 0;
+  const completedTraining = query.data?.filter(r => r.status === "completed").length || 0;
+  const inProgressTraining = query.data?.filter(r => r.status === "in_progress").length || 0;
 
-      <Card className="bg-card border-none shadow-sm">
+  const spotlightMetrics = [
+    {
+      label: t("total_records"),
+      value: totalTraining,
+      icon: GraduationCap,
+      color: "text-primary",
+    },
+    {
+      label: t("training_status_completed"),
+      value: completedTraining,
+      icon: CheckCircle2,
+      color: "text-success",
+    },
+    {
+      label: t("training_status_in_progress"),
+      value: inProgressTraining,
+      icon: Clock,
+      color: "text-warning",
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("training_title")}
+        subtitle={t("training_subtitle")}
+        icon={GraduationCap}
+        metrics={spotlightMetrics.map((item, index) => ({
+          label: item.label,
+          value: item.value,
+          icon: item.icon,
+          tone: index === 0 ? "primary" : index === 1 ? "success" : "warning",
+        }))}
+        actions={
+          <Button onClick={openAdd} className="gap-2">
+            <Plus className="h-4 w-4" />
+            {t("add")}
+          </Button>
+        }
+      />
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle>{t("training_records")}</CardTitle>
         </CardHeader>
@@ -160,7 +207,13 @@ export default function Training() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("no_data")}</p>
+            <EmptyState 
+              icon={GraduationCap} 
+              title={t("no_data")} 
+              description={t("training_no_records_desc", "No training records found. You can add new sessions here.")}
+              actionLabel={t("add_training_record")}
+              onAction={openAdd}
+            />
           )}
         </CardContent>
       </Card>
@@ -199,11 +252,11 @@ export default function Training() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("from_date")}</Label>
-                <Input type="date" value={formData.start_date} onChange={(e) => setFormData({ ...formData, start_date: e.target.value })} />
+                <DatePicker value={formData.start_date} onChange={(date) => setFormData({ ...formData, start_date: date })} />
               </div>
               <div className="space-y-2">
                 <Label>{t("to_date")}</Label>
-                <Input type="date" value={formData.end_date} onChange={(e) => setFormData({ ...formData, end_date: e.target.value })} />
+                <DatePicker value={formData.end_date} onChange={(date) => setFormData({ ...formData, end_date: date })} />
               </div>
             </div>
             <div className="space-y-2">

@@ -2,10 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPayroll, deletePayroll, getPayroll, updatePayroll } from "@/features/payroll/api/payroll";
 import type { PayrollQuery } from "@/features/payroll/api/payroll";
 
-export const usePayrollQuery = (params: PayrollQuery = {}) =>
+type QueryOptions = {
+  enabled?: boolean;
+};
+
+export const usePayrollQuery = (params: PayrollQuery = {}, options: QueryOptions = {}) =>
   useQuery({
     queryKey: ["payroll", params],
     queryFn: () => getPayroll(params),
+    enabled: options.enabled ?? true,
   });
 
 export const useCreatePayroll = () => {

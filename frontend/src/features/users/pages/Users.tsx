@@ -1,5 +1,5 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   UserCog,
   Plus,
@@ -9,7 +9,6 @@ import {
   Shield,
   ShieldCheck,
   ShieldAlert,
-  Search,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
@@ -51,6 +50,13 @@ import { EmptyState } from "@/shared/components/EmptyState";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { useCreateUser, useDeleteUser, useUpdateUser, useUsersQuery } from "@/features/users/hooks/useUsers";
 import type { User } from "@/types/api";
+import type { ApiPatchedUserRequest, ApiUserRequest } from "@/types/contracts";
+import { PageHero } from "@/shared/components/PageHero";
+import { TableToolbar } from "@/shared/components/TableToolbar";
+import { parseSortValue, sortRows } from "@/shared/lib/tableUtils";
+import { IconActionButton } from "@/shared/components/IconActionButton";
+
+import { useIsMobile } from "@/shared/hooks/use-mobile";
 
 const roles = ["system_admin", "hr_manager", "supervisor", "employee", "admin"] as const;
 const allPermissions = [
@@ -80,13 +86,16 @@ const rolePermissions: Record<string, string[]> = {
 
 export default function Users() {
   const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const isRtl = i18n.language === "ar";
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortValue, setSortValue] = useState("name:asc");
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -114,7 +123,29 @@ export default function Users() {
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
 
-  const users = query.data?.results ?? [];
+  useEffect(() => {
+    if (roleFilter !== "all") {
+      setShowAdvancedFilters(true);
+    }
+  }, [roleFilter]);
+
+  const users = useMemo(() => query.data?.results ?? [], [query.data]);
+  const { key: sortKey, direction } = parseSortValue(sortValue);
+  const sortedUsers = useMemo(
+    () =>
+      sortRows(
+        users,
+        sortKey,
+        direction,
+        {
+          name: (user) => user.name || user.username,
+          role: (user) => user.role,
+          status: (user) => (user.is_active ? "active" : "inactive"),
+          last_login: (user) => user.last_login,
+        },
+      ),
+    [users, sortKey, direction],
+  );
   const totalCount = query.data?.count ?? users.length;
   const pageSize = 25;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -226,7 +257,7 @@ export default function Users() {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const payload = {
+    const payload: ApiUserRequest = {
       username: formData.username,
       email: formData.email,
       role: formData.role,
@@ -244,7 +275,7 @@ export default function Users() {
           toast({ title: t("generic_error"), description: t("cannot_change_own_role") });
           return;
         }
-        await updateUser.mutateAsync({ id: selectedUser.id, data: payload });
+        await updateUser.mutateAsync({ id: selectedUser.id, data: payload as ApiPatchedUserRequest });
         toast({ title: t("user_updated"), description: t("user_updated_desc") });
       } else {
         if (!formData.password) {
@@ -295,54 +326,21 @@ export default function Users() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("users_title")}</h1>
-          <p className="text-muted-foreground">{t("users_subtitle")}</p>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className={`w-4 h-4 absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-muted-foreground`} />
-            <Input
-              className={`${isRtl ? "pr-9" : "pl-9"} w-56`}
-              placeholder={t("search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder={t("role")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("status_all")}</SelectItem>
-              {roles.map((role) => (
-                <SelectItem key={role} value={role}>
-                  {t(`role_${role}`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder={t("status")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("status_all")}</SelectItem>
-              <SelectItem value="true">{t("status_active")}</SelectItem>
-              <SelectItem value="false">{t("status_inactive")}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAdd} disabled={!canAdmin}>
-            <Plus className="w-4 h-4 ml-2" />
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("users_title")}
+        subtitle={t("users_subtitle")}
+        icon={UserCog}
+        actions={
+          <Button onClick={handleAdd} disabled={!canAdmin} className="gap-2">
+            <Plus className="w-4 h-4" />
             {t("add_user")}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-card border-none shadow-sm">
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
               <UserCog className="w-6 h-6 text-primary" />
@@ -353,10 +351,10 @@ export default function Users() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-none shadow-sm">
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-emerald-600" />
+            <div className="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-success" />
             </div>
             <div>
               <p className="text-2xl font-bold">
@@ -366,7 +364,7 @@ export default function Users() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-none shadow-sm">
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-destructive/10 flex items-center justify-center">
               <ShieldAlert className="w-6 h-6 text-destructive" />
@@ -379,10 +377,10 @@ export default function Users() {
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-card border-none shadow-sm">
+        <Card className="bg-card/90 border border-border/60 shadow-sm">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
-              <Shield className="w-6 h-6 text-amber-600" />
+            <div className="w-12 h-12 rounded-lg bg-warning/10 flex items-center justify-center">
+              <Shield className="w-6 h-6 text-warning" />
             </div>
             <div>
               <p className="text-2xl font-bold">
@@ -394,7 +392,65 @@ export default function Users() {
         </Card>
       </div>
 
-      <Card className="bg-card border-none shadow-sm">
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
+        <CardContent className="p-4">
+          <TableToolbar
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: t("search"),
+            }}
+            filters={
+              <>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-32">
+                    <SelectValue placeholder={t("status")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("status_all")}</SelectItem>
+                    <SelectItem value="true">{t("status_active")}</SelectItem>
+                    <SelectItem value="false">{t("status_inactive")}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAdvancedFilters((prev) => !prev)}
+                >
+                  {showAdvancedFilters ? t("hide_filters") : t("advanced_filters")}
+                </Button>
+                {showAdvancedFilters && (
+                  <Select value={roleFilter} onValueChange={setRoleFilter}>
+                    <SelectTrigger className="w-full sm:w-40">
+                      <SelectValue placeholder={t("role")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("status_all")}</SelectItem>
+                      {roles.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {t(`role_${role}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
+            }
+            sort={{
+              value: sortValue,
+              onChange: setSortValue,
+              options: [
+                { value: "name:asc", label: t("sort_name_asc") },
+                { value: "role:asc", label: t("sort_role") },
+                { value: "status:asc", label: t("sort_status") },
+                { value: "last_login:desc", label: t("sort_recent") },
+              ],
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserCog className="w-5 h-5 text-primary" />
@@ -404,81 +460,153 @@ export default function Users() {
         <CardContent>
           {users.length === 0 ? (
             <EmptyState title={t("no_data")} icon={UserCog} />
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {sortedUsers.map((user) => (
+                <div key={user.id} className="rounded-lg border border-border/60 bg-background p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-9 h-9">
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                          {getInitials(user.name || user.username || "-")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="text-sm font-semibold">{user.name || user.username}</div>
+                        <div className="text-xs text-muted-foreground">{user.email || "-"}</div>
+                      </div>
+                    </div>
+                    <Badge variant={user.is_active ? "success" : "secondary"}>
+                      {user.is_active ? t("status_active") : t("status_inactive")}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <div>{t("username")}: <span className="text-foreground font-mono">{user.username}</span></div>
+                    <div>{t("role")}: <span className="text-foreground">{t(`role_${user.role}`)}</span></div>
+                    <div>{t("last_login")}: <span className="text-foreground">{user.last_login || "-"}</span></div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <IconActionButton
+                      label={t("view_details")}
+                      onClick={() => handleView(user)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </IconActionButton>
+                    <IconActionButton
+                      label={t("edit")}
+                      onClick={() => handleEdit(user)}
+                      disabled={!canAdmin}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </IconActionButton>
+                    <IconActionButton
+                      label={t("delete")}
+                      className="text-destructive"
+                      onClick={() => handleDelete(user)}
+                      disabled={!canAdmin || String(user.id) === String(currentUser?.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </IconActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("user")}</TableHead>
-                  <TableHead>{t("username")}</TableHead>
-                  <TableHead>{t("role")}</TableHead>
-                  <TableHead>{t("status")}</TableHead>
-                  <TableHead>{t("last_login")}</TableHead>
-                  <TableHead>{t("actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarFallback className="bg-primary/10 text-primary">
-                            {getInitials(user.name || user.username || "-")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{user.name || user.username}</p>
-                          <p className="text-sm text-muted-foreground">{user.email || "-"}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono">{user.username}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getRoleIcon(user.role)}
-                        {t(`role_${user.role}`)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={user.is_active ? "default" : "secondary"}>
-                        {user.is_active ? t("status_active") : t("status_inactive")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {user.last_login || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleView(user)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)} disabled={!canAdmin}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(user)}
-                          disabled={!canAdmin || String(user.id) === String(currentUser?.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("user")}</TableHead>
+                    <TableHead>{t("username")}</TableHead>
+                    <TableHead>{t("role")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead>{t("last_login")}</TableHead>
+                    <TableHead>{t("actions")}</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sortedUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback className="bg-primary/10 text-primary">
+                              {getInitials(user.name || user.username || "-")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{user.name || user.username}</p>
+                            <p className="text-sm text-muted-foreground">{user.email || "-"}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono text-sm">{user.username || "-"}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getRoleIcon(user.role || "employee")}
+                          <span>{t(`role_${user.role || "employee"}`)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={user.is_active ? "success" : "secondary"}>
+                          {user.is_active ? t("status_active") : t("status_inactive")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {user.last_login || "-"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <IconActionButton
+                            label={t("view_details")}
+                            onClick={() => handleView(user)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </IconActionButton>
+                          <IconActionButton
+                            label={t("edit")}
+                            onClick={() => handleEdit(user)}
+                            disabled={!canAdmin}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </IconActionButton>
+                          <IconActionButton
+                            label={t("delete")}
+                            className="text-destructive"
+                            onClick={() => handleDelete(user)}
+                            disabled={!canAdmin || String(user.id) === String(currentUser?.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </IconActionButton>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
           <div className="flex items-center justify-between mt-4">
             <p className="text-sm text-muted-foreground">
               {page} / {totalPages}
             </p>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
                 {t("previous")}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
                 {t("next")}
               </Button>
             </div>
@@ -487,7 +615,7 @@ export default function Users() {
       </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir={isRtl ? "rtl" : "ltr"}>
           <DialogHeader>
             <DialogTitle>{selectedUser ? t("edit") : t("add_user")}</DialogTitle>
           </DialogHeader>
@@ -574,9 +702,9 @@ export default function Users() {
               </TabsContent>
 
               <TabsContent value="access" className="space-y-4 pt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <Label>{t("permissions")}</Label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
                       size="sm"
@@ -594,6 +722,7 @@ export default function Users() {
                       {t("permissions_clear_all")}
                     </Button>
                     <Switch
+                      className="self-start sm:self-center"
                       checked={formData.useRolePermissions}
                       onCheckedChange={(checked) =>
                         setFormData((prev) => ({
@@ -603,7 +732,7 @@ export default function Users() {
                         }))
                       }
                     />
-                    <span className="text-sm text-muted-foreground">{t("use_role_permissions")}</span>
+                    <span className="min-w-0 text-sm text-muted-foreground">{t("use_role_permissions")}</span>
                   </div>
                 </div>
                 <details className="rounded-lg border p-3">
@@ -650,8 +779,9 @@ export default function Users() {
                   </div>
                   <div className="space-y-2">
                     <Label>{t("force_password_change")}</Label>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Switch
+                        className="self-start sm:self-center"
                         checked={formData.mustChangePassword}
                         onCheckedChange={(checked) =>
                           setFormData({ ...formData, mustChangePassword: checked })
@@ -729,3 +859,4 @@ export default function Users() {
     </div>
   );
 }
+

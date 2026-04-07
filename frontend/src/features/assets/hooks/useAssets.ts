@@ -2,10 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAsset, deleteAsset, getAssets, updateAsset } from "@/features/assets/api/assets";
 import type { AssetsQuery } from "@/features/assets/api/assets";
 
-export const useAssetsQuery = (params: AssetsQuery = {}) =>
+type QueryOptions = {
+  enabled?: boolean;
+};
+
+export const useAssetsQuery = (params: AssetsQuery = {}, options: QueryOptions = {}) =>
   useQuery({
     queryKey: ["assets", params],
     queryFn: () => getAssets(params),
+    enabled: options.enabled ?? true,
   });
 
 export const useCreateAsset = () => {

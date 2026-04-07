@@ -2,10 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createTrainingRecord, deleteTrainingRecord, getTrainingRecords, updateTrainingRecord } from "@/features/training/api/training";
 import type { TrainingQuery } from "@/features/training/api/training";
 
-export const useTrainingQuery = (params: TrainingQuery = {}) =>
+type QueryOptions = {
+  enabled?: boolean;
+};
+
+export const useTrainingQuery = (params: TrainingQuery = {}, options: QueryOptions = {}) =>
   useQuery({
     queryKey: ["training", params],
     queryFn: () => getTrainingRecords(params),
+    enabled: options.enabled ?? true,
   });
 
 export const useCreateTraining = () => {

@@ -1,5 +1,9 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { User } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeUser } from "@/shared/lib/normalizers/users";
+import type { ApiPaginatedUserList, ApiUser, ApiUserRequest, ApiPatchedUserRequest } from "@/types/contracts";
+import type { User } from "../types";
+
 
 export type UsersQuery = {
   page?: number;
@@ -14,26 +18,52 @@ export type UsersResponse = {
   count: number;
 };
 
+export type InviteUsersPayload = {
+  emails: string[] | string;
+  role?: string;
+  message?: string;
+  forceRoleUpdate?: boolean;
+};
+
+export type InviteUsersResponse = {
+  status: string;
+  requested: number;
+  invited: number;
+  createdUsers: number;
+  existingUsers: number;
+  invalidEmails: string[];
+  results: Array<{
+    email: string;
+    userId: string;
+    username: string;
+    created: boolean;
+  }>;
+};
+
 export const getUsers = async (params: UsersQuery = {}) => {
   const res = await apiClient.get("/users/", { params });
-  const data = res.data as { results?: User[]; count?: number } | User[];
-  return {
-    results: unwrapList<User>(data),
-    count: (data as { count?: number }).count ?? unwrapList<User>(data).length,
-  } as UsersResponse;
+  return normalizePaginatedList(
+    res.data as ApiPaginatedUserList | ApiUser[],
+    normalizeUser,
+  ) as UsersResponse;
 };
 
-export const createUser = async (data: Partial<User> & { password?: string }) => {
+export const createUser = async (data: ApiUserRequest) => {
   const res = await apiClient.post("/users/", data);
-  return res.data as User;
+  return normalizeUser(res.data as ApiUser);
 };
 
-export const updateUser = async (id: string, data: Partial<User> & { password?: string }) => {
-  const res = await apiClient.put(`/users/${id}/`, data);
-  return res.data as User;
+export const updateUser = async (id: string, data: ApiPatchedUserRequest) => {
+  const res = await apiClient.patch(`/users/${id}/`, data);
+  return normalizeUser(res.data as ApiUser);
 };
 
 export const deleteUser = async (id: string) => {
   const res = await apiClient.delete(`/users/${id}/`);
   return res.data;
+};
+
+export const inviteUsers = async (data: InviteUsersPayload) => {
+  const res = await apiClient.post("/users/invite/", data);
+  return res.data as InviteUsersResponse;
 };

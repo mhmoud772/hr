@@ -1,4 +1,7 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeAsset } from "@/shared/lib/normalizers/features";
+import type { ApiAsset, ApiPaginatedAssetList } from "@/types/contracts";
 import type { Asset } from "@/types/api";
 
 export type AssetsQuery = {
@@ -9,7 +12,10 @@ export type AssetsQuery = {
 
 export const getAssets = async (params: AssetsQuery = {}) => {
   const res = await apiClient.get("/assets/", { params });
-  return unwrapList<Asset>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedAssetList | ApiAsset[],
+    normalizeAsset,
+  ).results;
 };
 
 export const getAssetsReport = async (params: AssetsQuery = {}) => {
@@ -19,17 +25,20 @@ export const getAssetsReport = async (params: AssetsQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/assets/report/", { params: mapped });
-  return unwrapList<Asset>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedAssetList | ApiAsset[],
+    normalizeAsset,
+  ).results;
 };
 
 export const createAsset = async (data: Partial<Asset>) => {
   const res = await apiClient.post("/assets/", data);
-  return res.data as Asset;
+  return normalizeAsset(res.data as ApiAsset);
 };
 
 export const updateAsset = async (id: string, data: Partial<Asset>) => {
   const res = await apiClient.patch(`/assets/${id}/`, data);
-  return res.data as Asset;
+  return normalizeAsset(res.data as ApiAsset);
 };
 
 export const deleteAsset = async (id: string) => {

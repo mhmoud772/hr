@@ -56,7 +56,7 @@ export function EmployeeDocumentsSection({ employeeId, canUpload = false }: Empl
   };
 
   return (
-    <Card className="bg-card border-none shadow-sm">
+    <Card className="bg-card/90 border border-border/60 shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-primary" />
@@ -66,7 +66,7 @@ export function EmployeeDocumentsSection({ employeeId, canUpload = false }: Empl
       <CardContent className="space-y-4">
         {canUpload && (
           <div className="grid gap-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>{t("document_title")}</Label>
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("document_title")} />
@@ -127,3 +127,4 @@ export function EmployeeDocumentsSection({ employeeId, canUpload = false }: Empl
     </Card>
   );
 }
+

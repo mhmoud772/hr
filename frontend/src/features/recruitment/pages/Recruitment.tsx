@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/shared/hooks/use-toast";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { EmptyState } from "@/shared/components/EmptyState";
-import { AlertTriangle } from "lucide-react";
+import { PageHero } from "@/shared/components/PageHero";
+import { AlertTriangle, FileSearch, Plus, Users, Search, UserCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -32,6 +33,7 @@ import {
 } from "@/shared/ui/select";
 import { useRecruitmentQuery, useCreateCandidate, useUpdateCandidate, useDeleteCandidate } from "@/features/recruitment/hooks/useRecruitment";
 import type { RecruitmentCandidate } from "@/types/api";
+import type { ApiRecruitmentCandidateRequest, ApiPatchedRecruitmentCandidateRequest } from "@/types/contracts";
 
 const statusOptions = ["applied", "screening", "interview", "offered", "hired", "rejected"];
 
@@ -89,10 +91,19 @@ export default function Recruitment() {
       return;
     }
     try {
+      const payload: ApiRecruitmentCandidateRequest = {
+        name: formData.name,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        position: formData.position,
+        status: formData.status,
+        source: formData.source || undefined,
+        notes: formData.notes || undefined,
+      };
       if (selected?.id) {
-        await updateCandidate.mutateAsync({ id: selected.id, data: formData });
+        await updateCandidate.mutateAsync({ id: selected.id, data: payload as ApiPatchedRecruitmentCandidateRequest });
       } else {
-        await createCandidate.mutateAsync(formData);
+        await createCandidate.mutateAsync(payload);
       }
       setFormOpen(false);
     } catch {
@@ -108,17 +119,52 @@ export default function Recruitment() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("recruitment_title")}</h1>
-          <p className="text-muted-foreground">{t("recruitment_subtitle")}</p>
-        </div>
-        <Button onClick={openAdd}>{t("add")}</Button>
-      </div>
+  const totalCandidates = query.data?.length || 0;
+  const screeningCount = query.data?.filter(r => r.status === "screening" || r.status === "interview").length || 0;
+  const hiredCount = query.data?.filter(r => r.status === "hired").length || 0;
 
-      <Card className="bg-card border-none shadow-sm">
+  const spotlightMetrics = [
+    {
+      label: t("total_records"),
+      value: totalCandidates,
+      icon: Users,
+      color: "text-primary",
+    },
+    {
+      label: t("candidate_status_screening"),
+      value: screeningCount,
+      icon: Search,
+      color: "text-warning",
+    },
+    {
+      label: t("candidate_status_hired"),
+      value: hiredCount,
+      icon: UserCheck,
+      color: "text-success",
+    },
+  ];
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("recruitment_title")}
+        subtitle={t("recruitment_subtitle")}
+        icon={Users}
+        metrics={spotlightMetrics.map((item, index) => ({
+          label: item.label,
+          value: item.value,
+          icon: item.icon,
+          tone: index === 0 ? "primary" : index === 1 ? "warning" : "success",
+        }))}
+        actions={
+          <Button onClick={openAdd} className="gap-2">
+            <Plus className="h-4 w-4" />
+            {t("add")}
+          </Button>
+        }
+      />
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle>{t("recruitment_candidates")}</CardTitle>
         </CardHeader>
@@ -158,7 +204,13 @@ export default function Recruitment() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("no_data")}</p>
+            <EmptyState 
+              icon={FileSearch} 
+              title={t("no_data")} 
+              description={t("recruitment_no_candidates_desc", "No candidates found. Start by adding a new applicant.")}
+              actionLabel={t("add_candidate")}
+              onAction={openAdd}
+            />
           )}
         </CardContent>
       </Card>

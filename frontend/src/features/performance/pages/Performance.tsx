@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "@/shared/hooks/use-toast";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { EmptyState } from "@/shared/components/EmptyState";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Edit, Trash2, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { Badge } from "@/shared/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,9 +34,13 @@ import {
 import { useEmployeesQuery } from "@/features/employees/hooks/useEmployees";
 import { usePerformanceQuery, useCreatePerformance, useUpdatePerformance, useDeletePerformance } from "@/features/performance/hooks/usePerformance";
 import type { PerformanceReview } from "@/types/api";
+import { PageHero } from "@/shared/components/PageHero";
+import { TableToolbar } from "@/shared/components/TableToolbar";
+import { parseSortValue, sortRows } from "@/shared/lib/tableUtils";
+import { IconActionButton } from "@/shared/components/IconActionButton";
 
 export default function Performance() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { toast } = useToast();
   const query = usePerformanceQuery();
   const employeesQuery = useEmployeesQuery();
@@ -50,6 +55,8 @@ export default function Performance() {
     rating: "3",
     notes: "",
   });
+  const [search, setSearch] = useState("");
+  const [sortValue, setSortValue] = useState("period:desc");
 
   const openAdd = () => {
     setSelected(null);
@@ -100,17 +107,72 @@ export default function Performance() {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("performance_title")}</h1>
-          <p className="text-muted-foreground">{t("performance_subtitle")}</p>
-        </div>
-        <Button onClick={openAdd}>{t("add")}</Button>
-      </div>
+  const reviews = useMemo(() => query.data ?? [], [query.data]);
+  const filteredReviews = useMemo(() => {
+    return reviews.filter((review) => {
+      const matchesSearch =
+        !search ||
+        [review.employeeId, review.period, String(review.rating)]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(search.toLowerCase());
+      return matchesSearch;
+    });
+  }, [reviews, search]);
 
-      <Card className="bg-card border-none shadow-sm">
+  const { key: sortKey, direction } = parseSortValue(sortValue);
+  const sortedReviews = useMemo(
+    () =>
+      sortRows(
+        filteredReviews,
+        sortKey,
+        direction,
+        {
+          employeeId: (review) => review.employeeId,
+          period: (review) => review.period,
+          rating: (review) => review.rating,
+        },
+      ),
+    [filteredReviews, sortKey, direction],
+  );
+  const getRatingVariant = (rating: number) => {
+    if (rating >= 4) return "success";
+    if (rating >= 3) return "info";
+    return "warning";
+  };
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("performance_title")}
+        subtitle={t("performance_title_desc")}
+        icon={BarChart3}
+        actions={<Button onClick={openAdd}>{t("add_review_label")}</Button>}
+      />
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
+        <CardContent className="p-4">
+          <TableToolbar
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: t("search_performance"),
+            }}
+            sort={{
+              value: sortValue,
+              onChange: setSortValue,
+              options: [
+                { value: "period:desc", label: t("sort_recent") },
+                { value: "employeeId:asc", label: t("sort_employee_id") },
+                { value: "rating:desc", label: t("sort_rating") },
+              ],
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle>{t("performance_reviews")}</CardTitle>
         </CardHeader>
@@ -119,7 +181,7 @@ export default function Performance() {
             <LoadingState label={t("loading")} />
           ) : query.isError ? (
             <EmptyState icon={AlertTriangle} title={t("error_loading")} />
-          ) : query.data?.length ? (
+          ) : sortedReviews.length ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -130,19 +192,25 @@ export default function Performance() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {query.data.map((review) => (
+                {sortedReviews.map((review) => (
                   <TableRow key={review.id}>
                     <TableCell>{review.employeeId}</TableCell>
                     <TableCell>{review.period}</TableCell>
-                    <TableCell>{review.rating}</TableCell>
+                    <TableCell>
+                      <Badge variant={getRatingVariant(review.rating)}>{review.rating}</Badge>
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => openEdit(review)}>
-                          {t("edit")}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(String(review.id))}>
-                          {t("delete")}
-                        </Button>
+                        <IconActionButton label={t("edit")} onClick={() => openEdit(review)}>
+                          <Edit className="w-4 h-4" />
+                        </IconActionButton>
+                        <IconActionButton
+                          label={t("delete")}
+                          className="text-destructive"
+                          onClick={() => handleDelete(String(review.id))}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </IconActionButton>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -150,13 +218,13 @@ export default function Performance() {
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground">{t("no_data")}</p>
+            <EmptyState title={t("no_data")} />
           )}
         </CardContent>
       </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg" dir={i18n.language?.startsWith("ar") ? "rtl" : "ltr"}>
           <DialogHeader>
             <DialogTitle>{selected ? t("edit") : t("add")}</DialogTitle>
           </DialogHeader>
@@ -176,7 +244,7 @@ export default function Performance() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("period")}</Label>
                 <Input value={formData.period} onChange={(e) => setFormData({ ...formData, period: e.target.value })} placeholder="2025-Q4" />
@@ -202,3 +270,5 @@ export default function Performance() {
     </div>
   );
 }
+
+

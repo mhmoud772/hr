@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import i18n from "@/i18n/i18n";
 
 type NotificationType = "success" | "error" | "warning" | "info";
 
@@ -33,8 +34,8 @@ export const notify = ({ title, description, type = "info", duration = 5000 }: N
 // HR-specific notifications
 export const notifyLeaveRequest = (employeeName: string, leaveType: string) => {
   notify({
-    title: "New leave request",
-    description: `${employeeName} submitted a ${leaveType} request.`,
+    title: i18n.t("notification_leave_request_title"),
+    description: i18n.t("notification_leave_request_desc", { employeeName, leaveType }),
     type: "info",
     duration: 6000,
   });
@@ -42,24 +43,24 @@ export const notifyLeaveRequest = (employeeName: string, leaveType: string) => {
 
 export const notifyLeaveApproved = (employeeName: string) => {
   notify({
-    title: "Leave approved",
-    description: `Leave request approved for ${employeeName}.`,
+    title: i18n.t("notification_leave_approved_title"),
+    description: i18n.t("notification_leave_approved_desc", { employeeName }),
     type: "success",
   });
 };
 
 export const notifyLeaveRejected = (employeeName: string) => {
   notify({
-    title: "Leave rejected",
-    description: `Leave request rejected for ${employeeName}.`,
+    title: i18n.t("notification_leave_rejected_title"),
+    description: i18n.t("notification_leave_rejected_desc", { employeeName }),
     type: "error",
   });
 };
 
 export const notifyLateArrival = (employeeName: string, arrivalTime: string) => {
   notify({
-    title: "Late arrival",
-    description: `${employeeName} arrived late at ${arrivalTime}.`,
+    title: i18n.t("notification_late_arrival_title"),
+    description: i18n.t("notification_late_arrival_desc", { employeeName, arrivalTime }),
     type: "warning",
     duration: 8000,
   });
@@ -67,24 +68,24 @@ export const notifyLateArrival = (employeeName: string, arrivalTime: string) => 
 
 export const notifyEmployeeAbsent = (employeeName: string) => {
   notify({
-    title: "Employee absent",
-    description: `${employeeName} did not check in today.`,
+    title: i18n.t("notification_employee_absent_title"),
+    description: i18n.t("notification_employee_absent_desc", { employeeName }),
     type: "warning",
   });
 };
 
 export const notifyReportGenerated = (reportType: string) => {
   notify({
-    title: "Report generated",
-    description: `${reportType} exported successfully.`,
+    title: i18n.t("notification_report_generated_title"),
+    description: i18n.t("notification_report_generated_desc", { reportType }),
     type: "success",
   });
 };
 
 export const notifyDeviceOffline = (deviceName: string, location: string) => {
   notify({
-    title: "Device offline",
-    description: `${deviceName} at ${location} is offline.`,
+    title: i18n.t("notification_device_offline_title"),
+    description: i18n.t("notification_device_offline_desc", { deviceName, location }),
     type: "error",
     duration: 10000,
   });
@@ -92,8 +93,8 @@ export const notifyDeviceOffline = (deviceName: string, location: string) => {
 
 export const notifySyncComplete = (deviceName: string, recordsCount: number) => {
   notify({
-    title: "Sync complete",
-    description: `Synced ${recordsCount} records from ${deviceName}.`,
+    title: i18n.t("notification_sync_complete_title"),
+    description: i18n.t("notification_sync_complete_desc", { deviceName, recordsCount }),
     type: "success",
   });
 };

@@ -11,7 +11,12 @@ import {
   updateEmployeeWithFile,
   getEmployeeMe,
 } from "@/features/employees/api/employees";
-import type { EmployeesQuery } from "@/features/employees/api/employees";
+import type { Employee } from "@/types/api";
+import type { EmployeesQuery, EmployeesResponse } from "@/features/employees/api/employees";
+
+type QueryOptions = {
+  enabled?: boolean;
+};
 
 export const useEmployeesQuery = (params: EmployeesQuery = {}) =>
   useQuery({
@@ -32,7 +37,30 @@ export const useUpdateEmployee = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateEmployee>[1] }) =>
       updateEmployee(id, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ["employees"] });
+      const previousQueries = queryClient.getQueriesData<EmployeesResponse>({ queryKey: ["employees"] });
+
+      queryClient.setQueriesData<EmployeesResponse>({ queryKey: ["employees"] }, (old) => {
+        if (!old || !old.results) return old;
+        return {
+          ...old,
+          results: old.results.map((item: Employee) => item.id === id ? { ...item, ...data } : item),
+        };
+      });
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, previousData]) => {
+          queryClient.setQueryData(queryKey, previousData);
+        });
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
   });
 };
 
@@ -40,7 +68,31 @@ export const useDeleteEmployee = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteEmployee(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["employees"] }),
+    onMutate: async (deletedId) => {
+      await queryClient.cancelQueries({ queryKey: ["employees"] });
+      const previousQueries = queryClient.getQueriesData<EmployeesResponse>({ queryKey: ["employees"] });
+
+      queryClient.setQueriesData<EmployeesResponse>({ queryKey: ["employees"] }, (old) => {
+        if (!old || !old.results) return old;
+        return {
+          ...old,
+          results: old.results.filter((item: Employee) => item.id !== deletedId),
+          count: Math.max(0, (old.count || 0) - 1),
+        };
+      });
+
+      return { previousQueries };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, previousData]) => {
+          queryClient.setQueryData(queryKey, previousData);
+        });
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
   });
 };
 
@@ -56,7 +108,7 @@ export const useUpdateEmployeeWithFile = () =>
 
 export const useExportEmployeesCSV = () =>
   useMutation({
-    mutationFn: exportEmployeesCSV,
+    mutationFn: (params?: EmployeesQuery) => exportEmployeesCSV(params),
   });
 
 export const useImportEmployeesCSV = () =>
@@ -71,9 +123,10 @@ export const useEmployeeSummaryQuery = (id?: string) =>
     enabled: Boolean(id),
   });
 
-export const useEmployeeMeQuery = () =>
+export const useEmployeeMeQuery = (options: QueryOptions = {}) =>
   useQuery({
     queryKey: ["employee-me"],
     queryFn: getEmployeeMe,
+    enabled: options.enabled ?? true,
   });
 

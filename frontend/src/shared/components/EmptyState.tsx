@@ -17,19 +17,29 @@ export function EmptyState({
   onAction,
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+    <div className="relative overflow-hidden rounded-[28px] border border-dashed border-border/70 bg-gradient-to-br from-muted/30 via-card to-card px-4 py-12 text-center shadow-sm">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-primary/5 to-transparent" />
+        <div className="absolute -right-10 top-6 h-28 w-28 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+      <div className="relative flex flex-col items-center justify-center">
       {Icon && (
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Icon className="w-8 h-8 text-muted-foreground" />
+        <div className="mb-5 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[22px] border border-primary/10 bg-background/90 shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Icon className="h-6 w-6" />
+          </div>
         </div>
       )}
-      <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
+      <h3 className="mb-2 text-xl font-bold tracking-tight text-foreground">{title}</h3>
       {description && (
-        <p className="text-muted-foreground max-w-md mb-4">{description}</p>
+        <p className="mb-5 max-w-md text-sm leading-7 text-muted-foreground sm:text-base">{description}</p>
       )}
       {actionLabel && onAction && (
-        <Button onClick={onAction}>{actionLabel}</Button>
+        <Button onClick={onAction} className="shadow-sm">
+          {actionLabel}
+        </Button>
       )}
+      </div>
     </div>
   );
 }

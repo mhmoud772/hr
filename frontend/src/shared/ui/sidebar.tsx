@@ -448,6 +448,8 @@ const SidebarMenuButton = React.forwardRef<
 >(({ asChild = false, isActive = false, variant = "default", size = "default", tooltip, className, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
   const { isMobile, state } = useSidebar();
+  const { i18n } = useTranslation();
+  const tooltipSide = i18n.language.startsWith("ar") ? "left" : "right";
 
   const button = (
     <Comp
@@ -473,7 +475,7 @@ const SidebarMenuButton = React.forwardRef<
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right" align="center" hidden={state !== "collapsed" || isMobile} {...tooltip} />
+      <TooltipContent side={tooltipSide} align="center" hidden={state !== "collapsed" || isMobile} {...tooltip} />
     </Tooltip>
   );
 });

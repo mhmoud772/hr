@@ -2,10 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPerformanceReview, deletePerformanceReview, getPerformanceReviews, updatePerformanceReview } from "@/features/performance/api/performance";
 import type { PerformanceQuery } from "@/features/performance/api/performance";
 
-export const usePerformanceQuery = (params: PerformanceQuery = {}) =>
+type QueryOptions = {
+  enabled?: boolean;
+};
+
+export const usePerformanceQuery = (params: PerformanceQuery = {}, options: QueryOptions = {}) =>
   useQuery({
     queryKey: ["performance", params],
     queryFn: () => getPerformanceReviews(params),
+    enabled: options.enabled ?? true,
   });
 
 export const useCreatePerformance = () => {

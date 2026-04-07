@@ -45,4 +45,4 @@ if url:
         print(f"Healthchecks ping failed: {exc}")
 PY
 
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120
+exec daphne -b 0.0.0.0 -p 8000 config.asgi:application

@@ -25,10 +25,11 @@ export function DeleteConfirmDialog({
   description,
   onConfirm,
 }: DeleteConfirmDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent dir="rtl">
+      <AlertDialogContent dir={isRtl ? "rtl" : "ltr"}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>

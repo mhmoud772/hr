@@ -10,3 +10,23 @@ Pillow>=11.3,<12.0
 python-dotenv>=1.0,<2.0
 sentry-sdk>=2.7,<3.0
 gunicorn>=22.0,<23.0
+celery>=5.4,<6.0
+redis>=5.0,<6.0
+uvicorn>=0.30,<0.31
+daphne>=4.0,<5.0
+channels>=4.0,<5.0
+channels-redis>=4.0,<5.0
+prometheus-client>=0.20,<0.21
+pyotp>=2.9,<3.0
+webauthn>=2.0.0
+pyzkaccess>=1.1,<1.2
+pyzk>=0.9,<1.0
+cryptography>=43,<47
+flake8>=7.1,<8.0
+psutil>=5.9,<7.0
+
+# AI/LLM Integration
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-google-genai>=2.0.0
+pgvector>=0.3.6

@@ -31,9 +31,11 @@ export function RequireAuth({ children, roles }: RequireAuthProps) {
     const inSecuritySettings =
       location.pathname === "/settings" &&
       new URLSearchParams(location.search).get("tab") === "security";
-    if (user.must_change_password && !inSecuritySettings) {
+    const inChangePasswordPage = location.pathname === "/change-password";
+    if (user.must_change_password && !inSecuritySettings && !inChangePasswordPage) {
       setStatus("denied");
-      navigate("/settings?tab=security", { replace: true });
+      const from = `${location.pathname}${location.search}`;
+      navigate("/change-password", { replace: true, state: { from } });
       return;
     }
     if (roles && !roles.includes(String(user.role || ""))) {
@@ -42,7 +44,7 @@ export function RequireAuth({ children, roles }: RequireAuthProps) {
       return;
     }
     setStatus("allowed");
-  }, [navigate, roles, user, loading, location.pathname]);
+  }, [navigate, roles, user, loading, location.pathname, location.search, t]);
   if (status !== "allowed") {
     return <LoadingState label={t("loading")} />;
   }

@@ -1,4 +1,4 @@
-﻿import { useEffect } from "react";
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { DatePicker } from "@/shared/ui/date-picker";
 import {
   Select,
   SelectContent,
@@ -46,7 +47,8 @@ export function AttendanceFormDialog({
   employees,
   isEmployeesLoading = false,
 }: AttendanceFormDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
   const schema = z
     .object({
       employeeId: z.string().min(1, t("employee_required")),
@@ -116,7 +118,7 @@ export function AttendanceFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="max-w-md" dir={isRtl ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle>
             {record ? t("attendance_form_edit_title") : t("attendance_form_add_title")}
@@ -163,7 +165,7 @@ export function AttendanceFormDialog({
                 <FormItem>
                   <FormLabel>{t("date")}</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -193,7 +195,7 @@ export function AttendanceFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="checkIn"
@@ -236,3 +238,4 @@ export function AttendanceFormDialog({
     </Dialog>
   );
 }
+

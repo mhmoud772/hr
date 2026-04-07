@@ -40,3 +40,38 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+
+*storybook.log
+storybook-static
+
+# Local artifacts and debug outputs
+artifacts/
+tmp/
+test-results/
+frontend/test-results/
+.agent/
+*.code-workspace
+jwt_token.txt
+
+# Local database backups / resets
+*.bak-*
+*.orig-*
+*.reset-backup-*
+*.test-*
+
+# Backend local diagnostics
+backend/check*.txt
+backend/*check*.txt
+backend/*output*.txt
+backend/*out*.txt
+backend/*err*.txt
+backend/*trace*.txt
+backend/debug_output.txt
+backend/error.txt
+backend/err.txt
+backend/pytest*.txt
+backend/temp_out.txt
+backend/tmp/
+
+# Native SDK / machine-local binaries
+backend/*.dll

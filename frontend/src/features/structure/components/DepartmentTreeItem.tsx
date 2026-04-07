@@ -15,7 +15,7 @@ import { useTranslation } from "react-i18next";
 interface Department {
   id: string;
   name: string;
-  parentId: string | null;
+  parentId?: string | null;
   managerName?: string;
   employeeCount: number;
   children?: Department[];

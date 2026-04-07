@@ -12,6 +12,25 @@ const DialogPortal = DialogPrimitive.Portal;
 
 const DialogClose = DialogPrimitive.Close;
 
+type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+  fallbackTitle?: string;
+  fallbackDescription?: string;
+  hideCloseButton?: boolean;
+  hideOverlay?: boolean;
+};
+
+const hasChildWithDisplayName = (children: React.ReactNode, displayName?: string): boolean => {
+  if (!displayName) return false;
+  return React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement(child)) return false;
+    const childDisplayName = (child.type as { displayName?: string })?.displayName;
+    return (
+      childDisplayName === displayName ||
+      hasChildWithDisplayName(child.props?.children, displayName)
+    );
+  });
+};
+
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -29,26 +48,55 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border border-border/60 bg-card/90 p-6 shadow-xl backdrop-blur-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent/70 data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPortal>
-));
+  DialogContentProps
+>(
+  (
+    {
+      className,
+      children,
+      fallbackTitle = "Dialog",
+      fallbackDescription = "Dialog content",
+      hideCloseButton = false,
+      hideOverlay = false,
+      ...props
+    },
+    ref,
+  ) => {
+  const hasTitle = hasChildWithDisplayName(children, DialogPrimitive.Title.displayName);
+  const hasDescription = hasChildWithDisplayName(children, DialogPrimitive.Description.displayName);
+
+  return (
+    <DialogPortal>
+      {!hideOverlay ? <DialogOverlay /> : null}
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[85vh] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-xl border border-border/60 bg-card/90 p-6 shadow-xl backdrop-blur-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          className,
+        )}
+        {...props}
+      >
+        {!hasTitle && fallbackTitle ? (
+          <div className="sr-only">
+            <DialogTitle>{fallbackTitle}</DialogTitle>
+          </div>
+        ) : null}
+        {children}
+        {!hasDescription && fallbackDescription ? (
+          <div className="sr-only">
+            <DialogDescription>{fallbackDescription}</DialogDescription>
+          </div>
+        ) : null}
+        {!hideCloseButton ? (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent/70 data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        ) : null}
+      </DialogPrimitive.Content>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { DatePicker } from "@/shared/ui/date-picker";
 import { Textarea } from "@/shared/ui/textarea";
 import {
   Accordion,
@@ -26,6 +27,11 @@ import {
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
+import { isValidPhoneNumber } from "react-phone-number-input";
+import { checkEmployeeUnique } from "@/features/employees/api/employees";
+import { HasPermission } from "@/shared/components/HasPermission";
 import {
   Form,
   FormControl,
@@ -36,6 +42,7 @@ import {
 } from "@/shared/ui/form";
 import type { Employee } from "@/types/api";
 import { useTranslation } from "react-i18next";
+import { useDraftStore } from "@/shared/store/draftStore";
 import { useDepartmentsQuery } from "@/features/structure/hooks/useDepartments";
 import { useJobTitlesQuery } from "@/features/job-titles/hooks/useJobTitles";
 
@@ -52,7 +59,13 @@ export function EmployeeFormDialog({
   employee,
   onSave,
 }: EmployeeFormDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
+  
+  const employeeDraft = useDraftStore((state) => state.employeeDraft);
+  const setEmployeeDraft = useDraftStore((state) => state.setEmployeeDraft);
+  const clearEmployeeDraft = useDraftStore((state) => state.clearEmployeeDraft);
+
   const departmentsQuery = useDepartmentsQuery();
   const jobTitlesQuery = useJobTitlesQuery({});
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -66,12 +79,25 @@ export function EmployeeFormDialog({
     () => (jobTitlesQuery.data?.results || []).map((job) => ({ id: job.id, name: job.name })),
     [jobTitlesQuery.data],
   );
+  const toOptionValue = (id: string | number, name: string) => `${id}::${name}`;
+  const extractId = (value: string) =>
+    value?.includes("::") ? parseInt(value.split("::")[0], 10) : null;
+  const extractName = (value: string) =>
+    value?.includes("::") ? value.split("::").slice(1).join("::") : value;
+  const findOptionValueByName = useCallback(
+    (options: { id: string | number; name: string }[], name?: string | null) => {
+      if (!name) return "";
+      const match = options.find((opt) => opt.name === name);
+      return match ? toOptionValue(match.id, match.name) : name;
+    },
+    [],
+  );
 
-  const employeeSchema = z.object({
+  const employeeSchema = useMemo(() => z.object({
     employeeId: z.string().min(1, t("employee_id_required")),
     name: z.string().min(2, t("name_required")),
     email: z.string().email(t("email_invalid")),
-    phone: z.string().min(8, t("phone_invalid")),
+    phone: z.string().min(8, t("phone_invalid")).refine((val) => !val || isValidPhoneNumber(val), { message: t("phone_invalid") }),
     department: z.string().min(1, t("department_required")),
     jobTitle: z.string().min(1, t("job_title_required")),
     hireDate: z.string().min(1, t("hire_date_required")),
@@ -81,23 +107,53 @@ export function EmployeeFormDialog({
     address: z.string().optional(),
     salary: z.string().optional(),
     contractStatus: z.enum(["permanent", "contract", "probation", "terminated"]),
-  });
+  }).superRefine(async (data, ctx) => {
+      if (data.employeeId) {
+          try {
+              const isTaken = await checkEmployeeUnique("employee_code", data.employeeId, employee?.id);
+              if (isTaken) {
+                  ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      message: t("employee_id_taken", "This Employee ID is already in use"),
+                      path: ["employeeId"],
+                  });
+              }
+          } catch (e) {
+              // ignore
+          }
+      }
+      if (data.email) {
+          try {
+              const isTaken = await checkEmployeeUnique("email", data.email, employee?.id);
+              if (isTaken) {
+                  ctx.addIssue({
+                      code: z.ZodIssueCode.custom,
+                      message: t("email_taken", "This email is already in use"),
+                      path: ["email"],
+                  });
+              }
+          } catch (e) {
+              // ignore
+          }
+      }
+  }), [t, employee?.id]);
 
   type EmployeeFormValues = z.infer<typeof employeeSchema>;
   const form = useForm<EmployeeFormValues>({
+    mode: "onBlur",
     resolver: zodResolver(employeeSchema),
     defaultValues: {
       employeeId: "",
-      name: "",
-      email: "",
-      phone: "",
-      department: "",
-      jobTitle: "",
-      hireDate: "",
-      status: "active",
-      nationality: "",
-      birthDate: "",
-      address: "",
+        name: "",
+        email: "",
+        phone: "",
+        department: "",
+        jobTitle: "",
+        hireDate: "",
+        status: "active",
+        nationality: "",
+        birthDate: "",
+        address: "",
       salary: "",
       contractStatus: "permanent",
     },
@@ -106,12 +162,12 @@ export function EmployeeFormDialog({
   useEffect(() => {
     if (employee) {
       form.reset({
-        employeeId: employee.id,
+        employeeId: employee.employeeCode || employee.id,
         name: employee.name,
         email: employee.email,
         phone: employee.phone || "",
-        department: employee.department || "",
-        jobTitle: employee.jobTitle || "",
+        department: findOptionValueByName(departmentOptions, employee.department),
+        jobTitle: findOptionValueByName(jobTitleOptions, employee.jobTitle),
         hireDate: employee.hireDate || "",
         status: employee.status,
         nationality: employee.nationality || "",
@@ -124,31 +180,50 @@ export function EmployeeFormDialog({
       setAvatarFile(null);
     } else {
       form.reset({
-        employeeId: "",
-        name: "",
-        email: "",
-        phone: "",
-        department: "",
-        jobTitle: "",
-        hireDate: new Date().toISOString().split("T")[0],
-        status: "active",
-        nationality: "",
-        birthDate: "",
-        address: "",
-        salary: "",
-        contractStatus: "permanent",
+        employeeId: employeeDraft?.employeeId || employeeDraft?.employeeCode || "",
+        name: employeeDraft?.name || "",
+        email: employeeDraft?.email || "",
+        phone: employeeDraft?.phone || "",
+        department: employeeDraft?.department || "",
+        jobTitle: employeeDraft?.jobTitle || "",
+        hireDate: employeeDraft?.hireDate || new Date().toISOString().split("T")[0],
+        status: employeeDraft?.status || "active",
+        nationality: employeeDraft?.nationality || "",
+        birthDate: employeeDraft?.birthDate || "",
+        address: employeeDraft?.address || "",
+        salary: employeeDraft?.salary?.toString() || "",
+        contractStatus: employeeDraft?.contractStatus || "permanent",
       });
       setAvatarPreview(null);
       setAvatarFile(null);
     }
-  }, [employee, open, form]);
+  }, [departmentOptions, employee, employeeDraft, findOptionValueByName, form, jobTitleOptions, open]);
 
+  
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      if (!employee && open) {
+        setEmployeeDraft(value as Partial<Employee>);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [employee, form, open, setEmployeeDraft]);
+  
   const handleSubmit = (values: EmployeeFormValues) => {
     const { employeeId, ...rest } = values;
+    const normalizedEmployeeCode = employeeId.trim() || undefined;
+    const normalizedDepartmentId = extractId(rest.department);
+    const normalizedJobTitleId = extractId(rest.jobTitle);
+    const normalizedHireDate = rest.hireDate?.trim() ? rest.hireDate : undefined;
+    const normalizedBirthDate = rest.birthDate?.trim() ? rest.birthDate : undefined;
     onSave(
       {
-        id: employeeId,
+        employeeCode: normalizedEmployeeCode,
         ...rest,
+        departmentId: normalizedDepartmentId ? String(normalizedDepartmentId) : null,
+        jobTitleId: normalizedJobTitleId ? String(normalizedJobTitleId) : null,
+        hireDate: normalizedHireDate,
+        birthDate: normalizedBirthDate,
         salary: rest.salary ? Number(rest.salary) : undefined,
       },
       avatarFile,
@@ -158,7 +233,7 @@ export function EmployeeFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden" dir="rtl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden" dir={isRtl ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle>
             {employee ? t("employee_form_edit_title") : t("employee_form_add_title")}
@@ -169,7 +244,7 @@ export function EmployeeFormDialog({
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
             <ScrollArea className="max-h-[65vh] pr-2">
               <div className="space-y-4 pr-2">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="employeeId"
@@ -199,7 +274,7 @@ export function EmployeeFormDialog({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="email"
@@ -228,7 +303,7 @@ export function EmployeeFormDialog({
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="department"
@@ -243,7 +318,7 @@ export function EmployeeFormDialog({
                           </FormControl>
                           <SelectContent>
                             {departmentOptions.map((dept) => (
-                              <SelectItem key={dept.id} value={dept.name}>
+                              <SelectItem key={dept.id} value={toOptionValue(dept.id, dept.name)}>
                                 {dept.name}
                               </SelectItem>
                             ))}
@@ -267,7 +342,7 @@ export function EmployeeFormDialog({
                           </FormControl>
                           <SelectContent>
                             {jobTitleOptions.map((title) => (
-                              <SelectItem key={title.id} value={title.name}>
+                              <SelectItem key={title.id} value={toOptionValue(title.id, title.name)}>
                                 {title.name}
                               </SelectItem>
                             ))}
@@ -279,7 +354,7 @@ export function EmployeeFormDialog({
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
                     name="hireDate"
@@ -287,7 +362,7 @@ export function EmployeeFormDialog({
                       <FormItem>
                         <FormLabel>{t("hire_date")}</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -345,7 +420,7 @@ export function EmployeeFormDialog({
                     <AccordionTrigger>{t("additional_details")}</AccordionTrigger>
                     <AccordionContent>
                       <div className="space-y-4 pt-2">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <FormField
                             control={form.control}
                             name="nationality"
@@ -366,7 +441,7 @@ export function EmployeeFormDialog({
                               <FormItem>
                                 <FormLabel>{t("birth_date")}</FormLabel>
                                 <FormControl>
-                                  <Input type="date" {...field} />
+                                  <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -374,20 +449,22 @@ export function EmployeeFormDialog({
                           />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="salary"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>{t("salary")}</FormLabel>
-                                <FormControl>
-                                  <Input type="number" min="0" step="0.01" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <HasPermission resource="payroll" action="read">
+                            <FormField
+                              control={form.control}
+                              name="salary"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t("salary")}</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min="0" step="0.01" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </HasPermission>
                           <div className="space-y-2">
                             <FormLabel>{t("avatar")}</FormLabel>
                             <Input
@@ -439,3 +516,5 @@ export function EmployeeFormDialog({
     </Dialog>
   );
 }
+
+

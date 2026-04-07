@@ -1,4 +1,7 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeAuditLog } from "@/shared/lib/normalizers/features";
+import type { ApiAuditLog, ApiPaginatedAuditLogList } from "@/types/contracts";
 import type { AuditLog } from "@/types/api";
 
 export type AuditLogQuery = {
@@ -9,5 +12,8 @@ export type AuditLogQuery = {
 
 export const getAuditLogs = async (params: AuditLogQuery = {}) => {
   const res = await apiClient.get("/audit-logs/", { params });
-  return unwrapList<AuditLog>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedAuditLogList | ApiAuditLog[],
+    normalizeAuditLog,
+  ).results;
 };

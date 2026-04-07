@@ -1,6 +1,9 @@
 // API methods for attendance CRUD
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { Attendance } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeAttendance } from "@/shared/lib/normalizers/attendance";
+import type { ApiAttendance, ApiPaginatedAttendanceList, ApiAttendanceRequest, ApiPatchedAttendanceRequest } from "@/types/contracts";
+import type { Attendance } from "../types";
 
 // Ensure API calls use VITE_API_URL from env.
 // Example: const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -22,6 +25,14 @@ export type AttendanceResponse = {
   count: number;
 };
 
+export type AttendanceImportLog = {
+  id: string;
+  source: string;
+  status: string;
+  message?: string;
+  created_at?: string;
+};
+
 export const getAttendance = async (params: AttendanceQuery = {}) => {
   const mapped: Record<string, unknown> = { ...params };
   if (params.employee) {
@@ -33,21 +44,20 @@ export const getAttendance = async (params: AttendanceQuery = {}) => {
     delete mapped.department;
   }
   const res = await apiClient.get("/attendance/", { params: mapped });
-  const data = res.data as { results?: Attendance[]; count?: number } | Attendance[];
-  return {
-    results: unwrapList<Attendance>(data),
-    count: (data as { count?: number }).count ?? unwrapList<Attendance>(data).length,
-  } as AttendanceResponse;
+  return normalizePaginatedList(
+    res.data as ApiPaginatedAttendanceList | ApiAttendance[],
+    normalizeAttendance,
+  ) as AttendanceResponse;
 };
 
-export const createAttendance = async (data: Partial<Attendance>) => {
+export const createAttendance = async (data: ApiAttendanceRequest) => {
   const res = await apiClient.post("/attendance/", data);
-  return res.data as Attendance;
+  return normalizeAttendance(res.data as ApiAttendance);
 };
 
-export const updateAttendance = async (id: string, data: Partial<Attendance>) => {
+export const updateAttendance = async (id: string, data: ApiPatchedAttendanceRequest) => {
   const res = await apiClient.patch(`/attendance/${id}/`, data);
-  return res.data as Attendance;
+  return normalizeAttendance(res.data as ApiAttendance);
 };
 
 export const deleteAttendance = async (id: string) => {
@@ -71,14 +81,18 @@ export const importAttendanceLogs = async (source: string = "device") => {
 };
 
 export const getAttendanceImportHistory = async () => {
-  const res = await apiClient.get("/attendance/import_history/");
-  return res.data as Array<{ id: string; source: string; status: string; message?: string; created_at?: string }>;
+  const res = await apiClient.get("/import-logs/");
+  return normalizePaginatedList(
+    res.data as { results?: AttendanceImportLog[]; count?: number } | AttendanceImportLog[],
+    (item) => item,
+  ).results;
 };
 
 export const getAttendanceReport = async (
   params: { start?: string; end?: string; status?: string; department?: string; job_title?: string; employee?: string } = {},
 ) => {
   const res = await apiClient.get("/attendance/report/", { params });
-  return unwrapList<Attendance>(res.data);
+  const data = res.data as ApiPaginatedAttendanceList | ApiAttendance[];
+  return normalizePaginatedList(data, normalizeAttendance).results;
 };
 

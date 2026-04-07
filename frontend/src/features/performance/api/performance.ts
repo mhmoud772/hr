@@ -1,5 +1,8 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { PerformanceReview } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizePerformanceReview } from "@/shared/lib/normalizers/features";
+import type { ApiPaginatedPerformanceReviewList, ApiPerformanceReview } from "@/types/contracts";
+import type { PerformanceReview } from "../types";
 
 export type PerformanceQuery = {
   employee?: string;
@@ -15,7 +18,10 @@ export const getPerformanceReviews = async (params: PerformanceQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/performance/", { params: mapped });
-  return unwrapList<PerformanceReview>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedPerformanceReviewList | ApiPerformanceReview[],
+    normalizePerformanceReview,
+  ).results;
 };
 
 export const getPerformanceReport = async (params: PerformanceQuery = {}) => {
@@ -25,17 +31,20 @@ export const getPerformanceReport = async (params: PerformanceQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/performance/report/", { params: mapped });
-  return unwrapList<PerformanceReview>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedPerformanceReviewList | ApiPerformanceReview[],
+    normalizePerformanceReview,
+  ).results;
 };
 
 export const createPerformanceReview = async (data: Partial<PerformanceReview>) => {
   const res = await apiClient.post("/performance/", data);
-  return res.data as PerformanceReview;
+  return normalizePerformanceReview(res.data as ApiPerformanceReview);
 };
 
 export const updatePerformanceReview = async (id: string, data: Partial<PerformanceReview>) => {
   const res = await apiClient.patch(`/performance/${id}/`, data);
-  return res.data as PerformanceReview;
+  return normalizePerformanceReview(res.data as ApiPerformanceReview);
 };
 
 export const deletePerformanceReview = async (id: string) => {

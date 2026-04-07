@@ -51,10 +51,11 @@ export function DepartmentFormDialog({
   isManagerLoading = false,
   formErrors = {},
 }: DepartmentFormDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl">
+      <DialogContent dir={isRtl ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle>
             {isEdit ? t("edit_department") : t("add_department")}

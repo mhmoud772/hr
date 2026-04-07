@@ -1,13 +1,23 @@
 # HR Companion
 
-## Project Structure
-- `frontend/`: Vite + React app
-- `backend/`: Django + DRF API
+A modern Human Resources management system based on a **Modular Monolith** architecture.
+
+## 📚 Project Documentation
+- **[Architecture & Design (Arabic)](file:///d:/hr-companion-main/ARCHITECTURE_AR.md)**: Detailed modular boundaries and core roles.
+- **[Data Contracts & schema (Technical)](file:///d:/hr-companion-main/DATA_CONTRACTS.md)**: OLTP to OLAP transition and and data exit.
+- **[AI Readiness Guide (Operational)](file:///d:/hr-companion-main/AI_READINESS.md)**: Guidelines for safe AI interaction and service layer patterns.
+
+## 🏗️ Project Structure
+- `frontend/`: Vite + React + Shadcn UI
+- `backend/apps/`: Modular domain logic (employees, attendance, devices, etc.)
+- `backend/shared/`: Cross-app utilities and infrastructure.
+- `backend/scripts/`: Local dev and and CI automation.
 
 ## Prerequisites
 - Node.js 18+
 - Python 3.10+
 - PostgreSQL
+- Redis (required for Celery background jobs)
 
 ## Environment Variables
 The backend loads `backend/.env` automatically via `python-dotenv`.
@@ -34,6 +44,36 @@ python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
+
+### Celery Worker (optional in local, required in production)
+Run in a second terminal when you want async tasks (device sync, queued emails):
+```bash
+cd backend
+celery -A config worker -l info
+```
+If Redis is not running locally, set `CELERY_TASK_ALWAYS_EAGER=true` in `backend/.env` for synchronous fallback.
+
+### ZKTeco device control (new)
+- Install backend deps (includes `pyzkaccess`) and ensure devices allow TCP port `4370` with the correct Comm Key.
+- API endpoints on `/api/devices/{id}/`:
+  - `POST sync/` → يجلب سجلات الحضور مباشرة من الجهاز ويحدث الحالة.
+  - `POST sync-time/` → يضبط ساعة الجهاز على وقت الخادم.
+  - `POST reboot/` → يعيد تشغيل الجهاز.
+  - `POST pull-logs/` (اختياري `limit`) → يسحب السجلات دون تشغيل مزامنة كاملة.
+  - `POST push-employee/` مع `employeeCode` → يدفع المستخدم إلى الجهاز.
+- أوصل الخادم بالأجهزة عبر شبكة داخلية/VPN؛ لا تفتح المنفذ 4370 على الإنترنت.
+
+### Advanced Device Control (new)
+- Device groups: `/api/device-groups/`
+- Device policies: `/api/device-policies/` and apply with `/api/device-policies/{id}/apply/`
+- Template registry and distribution: `/api/device-templates/` and `/api/device-templates/{id}/distribute/`
+- Command approvals: `/api/device-command-approvals/` with approve/reject actions
+- Command center queue/catalog/dashboard:
+  - `/api/device-command-center/catalog/`
+  - `/api/device-command-center/queue/`
+  - `/api/device-command-center/dashboard/`
+- Firmware rollout orchestration: `/api/device-firmware-rollouts/` + `/start/` + `/report/`
+- Device backups/restores: `/api/device-backups/` + `/restore/`
 
 ## Quick Start (Frontend)
 ```bash
@@ -121,13 +161,18 @@ BACKUP_DIR=/opt/hr-companion/backups ./ops/backup_db.sh
 ```
 
 ## Quality Checks
-Backend:
+For a full suite of automated checks (Backend + Frontend), run:
+```powershell
+backend/scripts/run_local_ci.ps1
+```
+
+Individual Backend checks:
 ```bash
 cd backend
 chmod +x ops/run_checks.sh
 ./ops/run_checks.sh
 ```
-Frontend:
+Individual Frontend checks:
 ```bash
 cd frontend
 chmod +x ops/run_checks.sh
@@ -140,6 +185,43 @@ Use `docker-compose.prod.yml` with a `.env` file at the repo root:
 cp backend/.env.example .env
 # Fill .env values (DB, SendGrid, Sentry, etc.)
 docker compose -f docker-compose.prod.yml up -d --build
+```
+`docker-compose.prod.yml` now includes both `redis` and `celery-worker` services, so queued tasks run automatically.
+
+## Push Images To Docker Hub
+This repo includes a helper script for publishing backend/frontend images:
+
+```bash
+powershell -ExecutionPolicy Bypass -File tools/push-dockerhub.ps1 -DockerHubUsername <dockerhub_user> -Tag v1.0.0 -ApiUrl https://your-domain/api -PushLatest
+```
+
+Notes:
+- Start Docker Desktop (Docker Engine must be running).
+- Login first with `docker login`, or set `DOCKERHUB_TOKEN` to let the script log in automatically.
+- Images pushed:
+  - `<dockerhub_user>/hr-backend:<tag>`
+  - `<dockerhub_user>/hr-frontend:<tag>`
+
+For release deployment, `docker-compose.release.yml` supports:
+- `DOCKERHUB_USERNAME` (default: `admin1ede`)
+- `IMAGE_TAG` (default: `latest`)
+
+## Deploy From Docker Hub On Server
+1. Copy deployment files to the server (or clone the repo).
+2. Create server env file from template:
+```bash
+cp release.env.example .env
+```
+3. Edit `.env` with real values (domain, secrets, DB password, Docker Hub username/tag).
+4. Start services from Docker Hub images:
+```bash
+docker compose --env-file .env -f docker-compose.release.yml pull
+docker compose --env-file .env -f docker-compose.release.yml up -d
+```
+5. Verify:
+```bash
+docker compose --env-file .env -f docker-compose.release.yml ps
+docker compose --env-file .env -f docker-compose.release.yml logs -f backend
 ```
 
 ### Sentry

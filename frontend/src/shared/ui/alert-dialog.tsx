@@ -25,22 +25,56 @@ const AlertDialogOverlay = React.forwardRef<
 ));
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName;
 
+type AlertDialogContentProps = React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> & {
+  fallbackTitle?: string;
+  fallbackDescription?: string;
+};
+
+const hasChildWithDisplayName = (children: React.ReactNode, displayName?: string): boolean => {
+  if (!displayName) return false;
+  return React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement(child)) return false;
+    const childDisplayName = (child.type as { displayName?: string })?.displayName;
+    return (
+      childDisplayName === displayName ||
+      hasChildWithDisplayName(child.props?.children, displayName)
+    );
+  });
+};
+
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <AlertDialogPortal>
-    <AlertDialogOverlay />
-    <AlertDialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border border-border/60 bg-card/90 p-6 shadow-xl backdrop-blur-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        className,
-      )}
-      {...props}
-    />
-  </AlertDialogPortal>
-));
+  AlertDialogContentProps
+>(({ className, children, fallbackTitle = "Alert", fallbackDescription = "Please confirm to continue.", ...props }, ref) => {
+  const hasTitle = hasChildWithDisplayName(children, AlertDialogPrimitive.Title.displayName);
+  const hasDescription = hasChildWithDisplayName(children, AlertDialogPrimitive.Description.displayName);
+
+  return (
+    <AlertDialogPortal>
+      <AlertDialogOverlay />
+      <AlertDialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border border-border/60 bg-card/90 p-6 shadow-xl backdrop-blur-sm duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+          className,
+        )}
+        {...props}
+      >
+        {!hasTitle && fallbackTitle ? (
+          <div className="sr-only">
+            <AlertDialogTitle>{fallbackTitle}</AlertDialogTitle>
+          </div>
+        ) : null}
+        {children}
+        {!hasDescription && fallbackDescription ? (
+          <div className="sr-only">
+            <AlertDialogDescription>{fallbackDescription}</AlertDialogDescription>
+          </div>
+        ) : null}
+      </AlertDialogPrimitive.Content>
+    </AlertDialogPortal>
+  );
+});
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;
 
 const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (

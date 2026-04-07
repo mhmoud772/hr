@@ -1,4 +1,7 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeNotification } from "@/shared/lib/normalizers/features";
+import type { ApiNotification, ApiPaginatedNotificationList, ApiNotificationRequest } from "@/types/contracts";
 import type { Notification } from "@/types/api";
 
 export type NotificationsQuery = {
@@ -9,12 +12,15 @@ export type NotificationsQuery = {
 
 export const getNotifications = async (params: NotificationsQuery = {}) => {
   const res = await apiClient.get("/notifications/", { params });
-  return unwrapList<Notification>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedNotificationList | ApiNotification[],
+    normalizeNotification,
+  ).results;
 };
 
-export const sendNotification = async (data: Notification) => {
+export const sendNotification = async (data: ApiNotificationRequest) => {
   const res = await apiClient.post("/notifications/", data);
-  return res.data as Notification;
+  return normalizeNotification(res.data as ApiNotification);
 };
 
 export const markNotificationsRead = async (ids: string[]) => {

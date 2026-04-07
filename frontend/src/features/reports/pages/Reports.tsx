@@ -1,218 +1,114 @@
-
-import { useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Button } from "@/shared/ui/button";
-import { Input } from "@/shared/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
-import { EmptyState } from "@/shared/components/EmptyState";
-import { LoadingState } from "@/shared/components/LoadingState";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/shared/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
-import { useToast } from "@/shared/hooks/use-toast";
+import { Tabs, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { useDepartmentsQuery } from "@/features/structure/hooks/useDepartments";
 import { useJobTitlesQuery } from "@/features/job-titles/hooks/useJobTitles";
-import { getAttendanceReport } from "@/features/attendance/api/attendance";
-import { getLeavesReport } from "@/features/leaves/api/leaves";
-import { getPayrollReport } from "@/features/payroll/api/payroll";
-import { getRecruitmentReport } from "@/features/recruitment/api/recruitment";
-import { getPerformanceReport } from "@/features/performance/api/performance";
-import { getTrainingReport } from "@/features/training/api/training";
-import { getAssetsReport } from "@/features/assets/api/assets";
-import { generateAttendanceReport, generateLeavesReport, downloadPDF } from "@/shared/lib/pdf-reports";
-import { exportToCsv, exportToExcelXml } from "@/shared/lib/export";
-import type {
-  Attendance,
+import { useReportGeneration } from "@/features/reports/hooks/useReportGeneration";
+import { useReportAI } from "@/features/reports/hooks/useReportAI";
+import { Card, CardContent } from "@/shared/ui/card";
+import { PageHero } from "@/shared/components/PageHero";
+import type { 
+  ReportType, 
+  Attendance, 
   Leave,
   PayrollRecord,
   RecruitmentCandidate,
   PerformanceReview,
   TrainingRecord,
   Asset,
+  AuditLog,
 } from "@/types/api";
 
-type ReportType =
-  | "attendance"
-  | "leaves"
-  | "payroll"
-  | "recruitment"
-  | "performance"
-  | "training"
-  | "assets"
-  | "discipline";
+import { AIInsightsPanel } from "../components/AIInsightsPanel";
+import { ReportSection } from "../components/ReportSection";
+import { TableToolbar } from "@/shared/components/TableToolbar";
+import { DatePicker } from "@/shared/ui/date-picker";
+import { Button } from "@/shared/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
+import { FileText, Loader2, Sparkles } from "lucide-react";
+import { Badge } from "@/shared/ui/badge";
+
+type ReportRow =
+  | Attendance
+  | Leave
+  | PayrollRecord
+  | RecruitmentCandidate
+  | PerformanceReview
+  | TrainingRecord
+  | Asset
+  | AuditLog;
+
+type GenericReportRow = {
+  employeeId?: string;
+  id?: string;
+  employeeName?: string;
+  name?: string;
+  userName?: string;
+  date?: string;
+  createdAt?: string;
+  hireDate?: string;
+  status?: string;
+};
+
+interface ColumnDefinition {
+  header: string;
+  render: (row: ReportRow) => React.ReactNode;
+}
 
 export default function Reports() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const departmentsQuery = useDepartmentsQuery();
-  const jobTitlesQuery = useJobTitlesQuery({});
-
+  const { t, i18n } = useTranslation();
+  
   const [activeReport, setActiveReport] = useState<ReportType>("attendance");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const [startDate, setStartDate] = useState<Date>(new Date(new Date().setDate(new Date().getDate() - 30)));
+  const [endDate, setEndDate] = useState<Date>(new Date());
   const [department, setDepartment] = useState("all");
   const [jobTitle, setJobTitle] = useState("all");
   const [status, setStatus] = useState("all");
-  const [leaveType, setLeaveType] = useState("all");
-  const [loading, setLoading] = useState(false);
 
-  const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
-  const [leaveData, setLeaveData] = useState<Leave[]>([]);
-  const [payrollData, setPayrollData] = useState<PayrollRecord[]>([]);
-  const [recruitmentData, setRecruitmentData] = useState<RecruitmentCandidate[]>([]);
-  const [performanceData, setPerformanceData] = useState<PerformanceReview[]>([]);
-  const [trainingData, setTrainingData] = useState<TrainingRecord[]>([]);
-  const [assetsData, setAssetsData] = useState<Asset[]>([]);
+  const {
+    data,
+    loading,
+    generateReport,
+    exportToPdf,
+    exportToCsv,
+    exportToExcel,
+  } = useReportGeneration();
+
+  const {
+    aiAnalysis,
+    isAnalyzing,
+    analyzeReport,
+    isEnabled: isAIEnabled,
+  } = useReportAI();
+
+  const departmentsQuery = useDepartmentsQuery();
+  const jobTitlesQuery = useJobTitlesQuery({});
 
   const departmentOptions = useMemo(
     () => (departmentsQuery.data || []).map((dept) => ({ id: String(dept.id), name: dept.name })),
     [departmentsQuery.data],
   );
+
   const jobTitleOptions = useMemo(
-    () => (jobTitlesQuery.data?.results || []).map((job) => ({ id: job.id, name: job.name })),
+    () => (jobTitlesQuery.data?.results || []).map((job) => ({ id: String(job.id), name: job.name })),
     [jobTitlesQuery.data],
   );
 
-  const clearData = () => {
-    setAttendanceData([]);
-    setLeaveData([]);
-    setPayrollData([]);
-    setRecruitmentData([]);
-    setPerformanceData([]);
-    setTrainingData([]);
-    setAssetsData([]);
-  };
-  const handleGenerate = async () => {
-    setLoading(true);
-    clearData();
-    try {
-      if (activeReport === "attendance") {
-        const data = await getAttendanceReport({
-          start: start || undefined,
-          end: end || undefined,
-          status: status === "all" ? undefined : status,
-          department: department === "all" ? undefined : department,
-          job_title: jobTitle === "all" ? undefined : jobTitle,
-        } as any);
-        setAttendanceData(data);
-      }
-      if (activeReport === "leaves") {
-        const data = await getLeavesReport({
-          start: start || undefined,
-          end: end || undefined,
-          status: status === "all" ? undefined : status,
-          leave_type: leaveType === "all" ? undefined : leaveType,
-          department: department === "all" ? undefined : department,
-          job_title: jobTitle === "all" ? undefined : jobTitle,
-        } as any);
-        setLeaveData(data);
-      }
-      if (activeReport === "payroll") {
-        const data = await getPayrollReport({
-          start: start || undefined,
-          end: end || undefined,
-          status: status === "all" ? undefined : status,
-        });
-        setPayrollData(data);
-      }
-      if (activeReport === "recruitment") {
-        const data = await getRecruitmentReport({
-          start: start || undefined,
-          end: end || undefined,
-          status: status === "all" ? undefined : status,
-        });
-        setRecruitmentData(data);
-      }
-      if (activeReport === "performance") {
-        const data = await getPerformanceReport({
-          start: start || undefined,
-          end: end || undefined,
-        });
-        setPerformanceData(data);
-      }
-      if (activeReport === "training") {
-        const data = await getTrainingReport({
-          start: start || undefined,
-          end: end || undefined,
-          status: status === "all" ? undefined : status,
-        });
-        setTrainingData(data);
-      }
-      if (activeReport === "assets") {
-        const data = await getAssetsReport({
-          status: status === "all" ? undefined : status,
-        });
-        setAssetsData(data);
-      }
-      if (activeReport === "discipline") {
-        const data = await getAttendanceReport({
-          start: start || undefined,
-          end: end || undefined,
-        });
-        const filtered = data.filter((item) => item.status === "absent" || item.status === "late");
-        setAttendanceData(filtered);
-      }
-    } catch {
-      toast({ title: t("generic_error"), description: t("error_loading"), variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+  const handleGenerate = () => {
+    generateReport(activeReport, {
+      start: startDate.toISOString().slice(0, 10),
+      end: endDate.toISOString().slice(0, 10),
+      department: department === "all" ? undefined : department,
+      jobTitle: jobTitle === "all" ? undefined : jobTitle,
+      status: status === "all" ? undefined : status,
+    });
   };
 
-  const handleExportAttendancePdf = () => {
-    const report = generateAttendanceReport(
-      attendanceData.map((item) => ({
-        employeeId: item.employeeId,
-        name: item.employeeName || "",
-        date: item.date,
-        checkIn: item.checkIn || "-",
-        checkOut: item.checkOut || "-",
-        workHours: item.workHours || "-",
-        status: item.status,
-      })),
-      `${start || t("range_today")} - ${end || t("range_today")}`,
-    );
-    downloadPDF(report, "attendance-report");
+  const handleAnalyze = () => {
+    void analyzeReport(activeReport, data);
   };
 
-  const handleExportLeavesPdf = () => {
-    const report = generateLeavesReport(
-      leaveData.map((item) => ({
-        employeeName: item.employeeName || "",
-        leaveType: item.leaveType,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        days: item.days || 0,
-        status: item.status,
-        reason: item.reason,
-      })),
-      t("leave_requests"),
-    );
-    downloadPDF(report, "leave-report");
-  };
-
-  const handleExportCsv = (rows: Record<string, unknown>[], filename: string) => {
-    exportToCsv(rows, filename);
-  };
-
-  const handleExportExcel = (rows: Record<string, unknown>[], filename: string) => {
-    exportToExcelXml(rows, filename);
-  };
-
-  const statusOptions = {
+  const statusOptions: Record<string, string[]> = {
     attendance: ["present", "absent", "late"],
     leaves: ["pending", "approved", "rejected"],
     payroll: ["draft", "approved", "paid"],
@@ -223,731 +119,298 @@ export default function Reports() {
 
   const leaveTypes = ["annual", "sick", "emergency", "unpaid"];
 
+  const reportTabs: { value: ReportType; label: string }[] = [
+    { value: "attendance", label: t("report_attendance") },
+    { value: "leaves", label: t("report_leaves") },
+    { value: "payroll", label: t("report_payroll") },
+    { value: "recruitment", label: t("report_recruitment") },
+    { value: "performance", label: t("report_performance") },
+    { value: "training", label: t("report_training") },
+    { value: "assets", label: t("report_assets") },
+    { value: "audit", label: t("report_audit") },
+  ];
+
+  const getColumns = (type: ReportType): ColumnDefinition[] => {
+    const common = [
+      { 
+        header: t("employee_id"), 
+        render: (row: ReportRow) => (row as GenericReportRow).employeeId || (row as GenericReportRow).id || "-" 
+      },
+      { 
+        header: t("name"), 
+        render: (row: ReportRow) => (row as GenericReportRow).employeeName || (row as GenericReportRow).name || (row as GenericReportRow).userName || t("unknown") 
+      },
+    ];
+
+    switch (type) {
+      case "attendance":
+        return [
+          ...common,
+          { header: t("date"), render: (row: ReportRow) => (row as Attendance).date },
+          { header: t("status"), render: (row: ReportRow) => (row as Attendance).status },
+          { header: t("check_in"), render: (row: ReportRow) => (row as Attendance).checkIn || "-" },
+          { header: t("check_out"), render: (row: ReportRow) => (row as Attendance).checkOut || "-" },
+        ];
+      case "leaves":
+        return [
+          ...common,
+          { header: t("leave_type"), render: (row: ReportRow) => t(`leave_type_${(row as Leave).leaveType}`) },
+          { header: t("start_date"), render: (row: ReportRow) => (row as Leave).startDate },
+          { header: t("end_date"), render: (row: ReportRow) => (row as Leave).endDate },
+          { header: t("status"), render: (row: ReportRow) => (row as Leave).status },
+        ];
+      case "payroll":
+        return [
+          ...common,
+          {
+            header: t("period"),
+            render: (row: ReportRow) =>
+              `${(row as PayrollRecord).period_start} - ${(row as PayrollRecord).period_end}`,
+          },
+          { header: t("basic_salary"), render: (row: ReportRow) => (row as PayrollRecord).base_salary },
+          { header: t("allowances"), render: (row: ReportRow) => (row as PayrollRecord).allowances },
+          { header: t("deductions"), render: (row: ReportRow) => (row as PayrollRecord).deductions },
+          { header: t("net_salary"), render: (row: ReportRow) => (row as PayrollRecord).net_salary },
+        ];
+      default:
+        return [
+          ...common,
+          { header: t("date"), render: (row: ReportRow) => (row as GenericReportRow).date || (row as GenericReportRow).createdAt || (row as GenericReportRow).hireDate || "-" },
+          { header: t("status"), render: (row: ReportRow) => (row as GenericReportRow).status || "-" },
+        ];
+    }
+  };
+
+  const activeReportLabel =
+    reportTabs.find((tab) => tab.value === activeReport)?.label || "-";
+  const selectedDepartmentLabel =
+    department === "all"
+      ? t("status_all")
+      : departmentOptions.find((option) => option.id === department)?.name || department;
+  const selectedJobTitleLabel =
+    jobTitle === "all"
+      ? t("status_all")
+      : jobTitleOptions.find((option) => option.name === jobTitle)?.name || jobTitle;
+  const selectedStatusLabel =
+    status === "all"
+      ? t("status_all")
+      : activeReport === "leaves"
+        ? t(`leave_type_${status}`)
+        : t(status);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{t("reports_title")}</h1>
-        <p className="text-muted-foreground">{t("reports_subtitle")}</p>
-      </div>
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("reports_title")}
+        subtitle={t("reports_subtitle")}
+        metrics={[
+          { label: t("total_records"), value: data.length, tone: "primary" },
+          {
+            label: t("status"),
+            value: activeReportLabel,
+            tone: "default",
+          },
+        ]}
+        aside={
+          <div className="space-y-4">
+            <div className="rounded-[28px] border border-border/60 bg-background/85 p-4 shadow-inner">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    {t("reports_title")}
+                  </p>
+                  <p className="text-xl font-black tracking-tight text-foreground">{activeReportLabel}</p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+                  <FileText className="h-5 w-5" />
+                </span>
+              </div>
 
-      <Tabs value={activeReport} onValueChange={(val) => setActiveReport(val as ReportType)} className="space-y-4">
-        <TabsList className="bg-muted/50 flex flex-wrap">
-          <TabsTrigger value="attendance">{t("report_type_attendance")}</TabsTrigger>
-          <TabsTrigger value="leaves">{t("report_type_leaves")}</TabsTrigger>
-          <TabsTrigger value="payroll">{t("report_type_payroll")}</TabsTrigger>
-          <TabsTrigger value="recruitment">{t("report_type_recruitment")}</TabsTrigger>
-          <TabsTrigger value="performance">{t("report_type_performance")}</TabsTrigger>
-          <TabsTrigger value="training">{t("report_type_training")}</TabsTrigger>
-          <TabsTrigger value="assets">{t("report_type_assets")}</TabsTrigger>
-          <TabsTrigger value="discipline">{t("report_type_discipline")}</TabsTrigger>
-        </TabsList>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="rounded-2xl border border-border/60 bg-card/90 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    {t("from_date")}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    {startDate.toLocaleDateString(i18n.language)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/60 bg-card/90 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    {t("to_date")}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    {endDate.toLocaleDateString(i18n.language)}
+                  </p>
+                </div>
+              </div>
 
-        <Card className="bg-card border-none shadow-sm">
-          <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">{t("from_date")}</label>
-              <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge variant="secondary" className="rounded-full bg-card text-muted-foreground">
+                  {t("department")}: {selectedDepartmentLabel}
+                </Badge>
+                <Badge variant="secondary" className="rounded-full bg-card text-muted-foreground">
+                  {t("job_title")}: {selectedJobTitleLabel}
+                </Badge>
+                <Badge variant="secondary" className="rounded-full bg-card text-muted-foreground">
+                  {t("status")}: {selectedStatusLabel}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="rounded-full border-primary/20 bg-primary/10 text-primary"
+                >
+                  {t("ai_assistant")}: {isAIEnabled ? t("enabled") : t("disabled")}
+                </Badge>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">{t("to_date")}</label>
-              <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-            </div>
-            {(activeReport === "attendance" || activeReport === "leaves") && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{t("department")}</label>
-                <Select value={department} onValueChange={setDepartment}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder={t("department")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("status_all")}</SelectItem>
-                    {departmentOptions.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {(activeReport === "attendance" || activeReport === "leaves") && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{t("job_title")}</label>
-                <Select value={jobTitle} onValueChange={setJobTitle}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder={t("job_title")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("status_all")}</SelectItem>
-                    {jobTitleOptions.map((job) => (
-                      <SelectItem key={job.id} value={job.name}>
-                        {job.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {activeReport === "leaves" && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{t("leave_type_label")}</label>
-                <Select value={leaveType} onValueChange={setLeaveType}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue placeholder={t("leave_type_label")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("status_all")}</SelectItem>
-                    {leaveTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {t(`leave_type_${type}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {activeReport !== "performance" && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{t("status")}</label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder={t("status")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("status_all")}</SelectItem>
-                    {(statusOptions as Record<string, string[]>)[activeReport]?.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {t(option)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <Button onClick={handleGenerate} disabled={loading}>
-              {loading ? t("loading") : t("generate_report")}
-            </Button>
+          </div>
+        }
+      />
+
+      <Tabs 
+        value={activeReport} 
+        onValueChange={(val) => {
+          setActiveReport(val as ReportType);
+          setStatus("all");
+        }}
+        className="space-y-6"
+      >
+        <div className="overflow-x-auto rounded-[28px] border border-border/60 bg-card/80 p-3 shadow-sm">
+          <TabsList className="h-auto gap-2 bg-transparent p-0">
+            {reportTabs.map((tab) => (
+              <TabsTrigger 
+                key={tab.value} 
+                value={tab.value}
+                className="rounded-2xl border border-transparent bg-background/60 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-all hover:border-primary/20 hover:bg-primary/5 hover:text-foreground data-[state=active]:border-primary/20 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        <Card className="overflow-hidden rounded-[28px] border border-border/60 bg-card/90 shadow-sm">
+          <CardContent className="p-4">
+            <TableToolbar
+              filters={
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{t("from")}:</span>
+                    <DatePicker value={startDate} onChange={(date) => date && setStartDate(date)} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{t("to")}:</span>
+                    <DatePicker value={endDate} onChange={(date) => date && setEndDate(date)} />
+                  </div>
+                  
+                  {(activeReport === "attendance" || activeReport === "leaves") && (
+                    <Select value={department} onValueChange={setDepartment}>
+                      <SelectTrigger className="w-full sm:w-40 bg-background/50 border-none shadow-none focus:ring-1">
+                        <SelectValue placeholder={t("department")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("status_all")}</SelectItem>
+                        {departmentOptions.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  
+                  {(activeReport === "attendance" || activeReport === "leaves") && (
+                    <Select value={jobTitle} onValueChange={setJobTitle}>
+                      <SelectTrigger className="w-full sm:w-40 bg-background/50 border-none shadow-none focus:ring-1">
+                        <SelectValue placeholder={t("job_title")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("status_all")}</SelectItem>
+                        {jobTitleOptions.map((job) => (
+                          <SelectItem key={job.id} value={job.name}>
+                            {job.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  
+                  {activeReport === "leaves" ? (
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger className="w-full sm:w-40 bg-background/50 border-none shadow-none focus:ring-1">
+                        <SelectValue placeholder={t("leave_type_label")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("status_all")}</SelectItem>
+                        {leaveTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {t(`leave_type_${type}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : activeReport !== "performance" && (
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger className="w-full sm:w-40 bg-background/50 border-none shadow-none focus:ring-1">
+                        <SelectValue placeholder={t("status")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("status_all")}</SelectItem>
+                        {statusOptions[activeReport]?.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {t(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              }
+              actions={
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleGenerate} disabled={loading} size="sm" className="min-w-28">
+                    {loading ? t("loading") : t("generate_report")}
+                  </Button>
+                  {isAIEnabled && (
+                    <Button
+                      onClick={handleAnalyze}
+                      disabled={loading || isAnalyzing}
+                      variant="secondary"
+                      size="sm"
+                      className="px-3 shrink-0"
+                      title={t('ai_analyze_button_title', "Analyze with AI")}
+                    >
+                      {isAnalyzing
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Sparkles className="w-4 h-4 text-primary" />
+                      }
+                    </Button>
+                  )}
+                </div>
+              }
+            />
           </CardContent>
         </Card>
-        <TabsContent value="attendance">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("attendance_report_title")}</CardTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleExportAttendancePdf} disabled={!attendanceData.length}>
-                  {t("export_pdf")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      attendanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        name: item.employeeName || "",
-                        date: item.date,
-                        status: item.status,
-                        checkIn: item.checkIn || "-",
-                        checkOut: item.checkOut || "-",
-                        workHours: item.workHours || "-",
-                      })),
-                      "attendance-report.csv",
-                    )
-                  }
-                  disabled={!attendanceData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      attendanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        name: item.employeeName || "",
-                        date: item.date,
-                        status: item.status,
-                        checkIn: item.checkIn || "-",
-                        checkOut: item.checkOut || "-",
-                        workHours: item.workHours || "-",
-                      })),
-                      "attendance-report.xls",
-                    )
-                  }
-                  disabled={!attendanceData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: attendanceData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : attendanceData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_id")}</TableHead>
-                      <TableHead>{t("name")}</TableHead>
-                      <TableHead>{t("date")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendanceData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeId}</TableCell>
-                        <TableCell>{row.employeeName || "-"}</TableCell>
-                        <TableCell>{row.date}</TableCell>
-                        <TableCell>{t(row.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="leaves">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("leave_report_title")}</CardTitle>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleExportLeavesPdf} disabled={!leaveData.length}>
-                  {t("export_pdf")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      leaveData.map((item) => ({
-                        employeeName: item.employeeName || "",
-                        leaveType: item.leaveType,
-                        startDate: item.startDate,
-                        endDate: item.endDate,
-                        days: item.days || 0,
-                        status: item.status,
-                      })),
-                      "leave-report.csv",
-                    )
-                  }
-                  disabled={!leaveData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      leaveData.map((item) => ({
-                        employeeName: item.employeeName || "",
-                        leaveType: item.leaveType,
-                        startDate: item.startDate,
-                        endDate: item.endDate,
-                        days: item.days || 0,
-                        status: item.status,
-                      })),
-                      "leave-report.xls",
-                    )
-                  }
-                  disabled={!leaveData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: leaveData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : leaveData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_name")}</TableHead>
-                      <TableHead>{t("leave_type_label")}</TableHead>
-                      <TableHead>{t("from_date")}</TableHead>
-                      <TableHead>{t("to_date")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {leaveData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeName || "-"}</TableCell>
-                        <TableCell>{t(`leave_type_${row.leaveType}`)}</TableCell>
-                        <TableCell>{row.startDate}</TableCell>
-                        <TableCell>{row.endDate}</TableCell>
-                        <TableCell>{t(row.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="payroll">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_payroll")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      payrollData.map((item) => ({
-                        employeeId: item.employeeId,
-                        periodStart: item.period_start,
-                        periodEnd: item.period_end,
-                        baseSalary: item.base_salary,
-                        allowances: item.allowances,
-                        deductions: item.deductions,
-                        netSalary: item.net_salary,
-                        status: item.status,
-                      })),
-                      "payroll-report.csv",
-                    )
-                  }
-                  disabled={!payrollData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      payrollData.map((item) => ({
-                        employeeId: item.employeeId,
-                        periodStart: item.period_start,
-                        periodEnd: item.period_end,
-                        baseSalary: item.base_salary,
-                        allowances: item.allowances,
-                        deductions: item.deductions,
-                        netSalary: item.net_salary,
-                        status: item.status,
-                      })),
-                      "payroll-report.xls",
-                    )
-                  }
-                  disabled={!payrollData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: payrollData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : payrollData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_id")}</TableHead>
-                      <TableHead>{t("period")}</TableHead>
-                      <TableHead>{t("net_salary")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payrollData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeId}</TableCell>
-                        <TableCell>{row.period_start} - {row.period_end}</TableCell>
-                        <TableCell>{row.net_salary}</TableCell>
-                        <TableCell>{t(row.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <AIInsightsPanel 
+          aiAnalysis={aiAnalysis} 
+          isAIEnabled={isAIEnabled} 
+        />
 
-        <TabsContent value="recruitment">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_recruitment")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      recruitmentData.map((item) => ({
-                        name: item.name,
-                        email: item.email || "",
-                        phone: item.phone || "",
-                        position: item.position,
-                        status: item.status,
-                        appliedAt: item.applied_at || "",
-                      })),
-                      "recruitment-report.csv",
-                    )
-                  }
-                  disabled={!recruitmentData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      recruitmentData.map((item) => ({
-                        name: item.name,
-                        email: item.email || "",
-                        phone: item.phone || "",
-                        position: item.position,
-                        status: item.status,
-                        appliedAt: item.applied_at || "",
-                      })),
-                      "recruitment-report.xls",
-                    )
-                  }
-                  disabled={!recruitmentData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: recruitmentData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : recruitmentData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("name")}</TableHead>
-                      <TableHead>{t("email")}</TableHead>
-                      <TableHead>{t("job_title")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recruitmentData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.name}</TableCell>
-                        <TableCell>{row.email || "-"}</TableCell>
-                        <TableCell>{row.position}</TableCell>
-                        <TableCell>{t(row.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="performance">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_performance")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      performanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        period: item.period,
-                        rating: item.rating,
-                        reviewer: item.reviewerName || "",
-                        notes: item.notes || "",
-                      })),
-                      "performance-report.csv",
-                    )
-                  }
-                  disabled={!performanceData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      performanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        period: item.period,
-                        rating: item.rating,
-                        reviewer: item.reviewerName || "",
-                        notes: item.notes || "",
-                      })),
-                      "performance-report.xls",
-                    )
-                  }
-                  disabled={!performanceData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: performanceData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : performanceData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_id")}</TableHead>
-                      <TableHead>{t("period")}</TableHead>
-                      <TableHead>{t("rating")}</TableHead>
-                      <TableHead>{t("reviewer")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {performanceData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeId}</TableCell>
-                        <TableCell>{row.period}</TableCell>
-                        <TableCell>{row.rating}</TableCell>
-                        <TableCell>{row.reviewerName || "-"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="training">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_training")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      trainingData.map((item) => ({
-                        employeeId: item.employeeId,
-                        title: item.title,
-                        provider: item.provider || "",
-                        startDate: item.start_date || "",
-                        endDate: item.end_date || "",
-                        status: item.status,
-                      })),
-                      "training-report.csv",
-                    )
-                  }
-                  disabled={!trainingData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      trainingData.map((item) => ({
-                        employeeId: item.employeeId,
-                        title: item.title,
-                        provider: item.provider || "",
-                        startDate: item.start_date || "",
-                        endDate: item.end_date || "",
-                        status: item.status,
-                      })),
-                      "training-report.xls",
-                    )
-                  }
-                  disabled={!trainingData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: trainingData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : trainingData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_id")}</TableHead>
-                      <TableHead>{t("title")}</TableHead>
-                      <TableHead>{t("provider")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {trainingData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeId}</TableCell>
-                        <TableCell>{row.title}</TableCell>
-                        <TableCell>{row.provider || "-"}</TableCell>
-                        <TableCell>{t(`training_status_${row.status}`)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="assets">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_assets")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      assetsData.map((item) => ({
-                        name: item.name,
-                        serial: item.serial_number || "",
-                        category: item.category || "",
-                        status: item.status,
-                        assignedTo: item.assignedTo || "",
-                      })),
-                      "assets-report.csv",
-                    )
-                  }
-                  disabled={!assetsData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      assetsData.map((item) => ({
-                        name: item.name,
-                        serial: item.serial_number || "",
-                        category: item.category || "",
-                        status: item.status,
-                        assignedTo: item.assignedTo || "",
-                      })),
-                      "assets-report.xls",
-                    )
-                  }
-                  disabled={!assetsData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: assetsData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : assetsData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("asset_name")}</TableHead>
-                      <TableHead>{t("serial_number")}</TableHead>
-                      <TableHead>{t("category")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assetsData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.name}</TableCell>
-                        <TableCell>{row.serial_number || "-"}</TableCell>
-                        <TableCell>{row.category || "-"}</TableCell>
-                        <TableCell>{t(`asset_status_${row.status}`)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="discipline">
-          <Card className="bg-card border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{t("report_type_discipline")}</CardTitle>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportCsv(
-                      attendanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        name: item.employeeName || "",
-                        date: item.date,
-                        status: item.status,
-                      })),
-                      "discipline-report.csv",
-                    )
-                  }
-                  disabled={!attendanceData.length}
-                >
-                  {t("export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    handleExportExcel(
-                      attendanceData.map((item) => ({
-                        employeeId: item.employeeId,
-                        name: item.employeeName || "",
-                        date: item.date,
-                        status: item.status,
-                      })),
-                      "discipline-report.xls",
-                    )
-                  }
-                  disabled={!attendanceData.length}
-                >
-                  {t("export_excel")}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{t("records_count", { count: attendanceData.length })}</p>
-              {loading ? (
-                <LoadingState label={t("loading")} />
-              ) : attendanceData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("employee_id")}</TableHead>
-                      <TableHead>{t("name")}</TableHead>
-                      <TableHead>{t("date")}</TableHead>
-                      <TableHead>{t("status")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendanceData.slice(0, 10).map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.employeeId}</TableCell>
-                        <TableCell>{row.employeeName || "-"}</TableCell>
-                        <TableCell>{row.date}</TableCell>
-                        <TableCell>{t(row.status)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <EmptyState title={t("no_data")} description={t("generate_report_hint")} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {reportTabs.map((tab) => (
+          <ReportSection
+            // ReportSection itself is generic; at runtime the tab data is homogeneous per report type.
+            key={tab.value}
+            value={tab.value}
+            title={tab.label}
+            data={activeReport === tab.value ? (data as ReportRow[]) : []}
+            loading={activeReport === tab.value && loading}
+            columns={getColumns(tab.value)}
+            onExportPdf={() => exportToPdf(tab.value, data)}
+            onExportCsv={() => exportToCsv(tab.value, data)}
+            onExportExcel={() => exportToExcel(tab.value, data)}
+          />
+        ))}
       </Tabs>
     </div>
   );

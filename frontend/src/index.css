@@ -34,6 +34,15 @@ All colors MUST be HSL.
     --destructive: 0 72% 50%;
     --destructive-foreground: 0 85% 97%;
 
+    --success: 142 72% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 92% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
     --border: 214 26% 84%;
     --input: 214 30% 88%;
     --ring: 186 74% 45%;
@@ -120,6 +129,15 @@ All colors MUST be HSL.
     --destructive: 0 70% 52%;
     --destructive-foreground: 0 85% 97%;
 
+    --success: 142 70% 48%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 199 89% 55%;
+    --info-foreground: 0 0% 100%;
+
     --border: 215 20% 24%;
     --input: 215 20% 24%;
     --ring: 186 74% 50%;
@@ -165,12 +183,41 @@ All colors MUST be HSL.
     font-family: "Cairo", "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
   }
 
+  html[dir="rtl"] .tooltip-content {
+    text-align: right;
+  }
+
+  html[dir="rtl"] .breadcrumb-separator {
+    transform: rotate(180deg);
+  }
+
+  :root[data-table-density="compact"] .table-cell {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  :root[data-table-density="compact"] .table-head {
+    height: 2rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+  }
+
   ::selection {
     background-color: hsl(var(--primary) / 0.2);
   }
 }
 
 @layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
   @keyframes float-slow {
     0%,
     100% {

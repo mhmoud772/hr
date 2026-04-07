@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { DatePicker } from "@/shared/ui/date-picker";
 import { Textarea } from "@/shared/ui/textarea";
 import {
   Select,
@@ -49,7 +50,8 @@ export function LeaveRequestDialog({
   employees,
   isEmployeesLoading = false,
 }: LeaveRequestDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language?.startsWith("ar");
   const [attachments, setAttachments] = useState<File[]>([]);
 
   const employeeOptions = useMemo(
@@ -118,7 +120,7 @@ export function LeaveRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="max-w-md" dir={isRtl ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle>
             {request ? t("leave_form_edit_title") : t("leave_form_add_title")}
@@ -183,7 +185,7 @@ export function LeaveRequestDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="startDate"
@@ -191,7 +193,7 @@ export function LeaveRequestDialog({
                   <FormItem>
                     <FormLabel>{t("from_date")}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -204,7 +206,7 @@ export function LeaveRequestDialog({
                   <FormItem>
                     <FormLabel>{t("to_date")}</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -249,3 +251,4 @@ export function LeaveRequestDialog({
     </Dialog>
   );
 }
+

@@ -1,6 +1,18 @@
 // API methods for leaves CRUD
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { Leave, LeaveBalance } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import {
+  normalizeLeave,
+  normalizeLeaveBalance,
+} from "@/shared/lib/normalizers/attendance";
+import type {
+  ApiLeave,
+  ApiLeaveBalance,
+  ApiPaginatedLeaveList,
+  ApiLeaveRequest,
+  ApiPatchedLeaveRequest,
+} from "@/types/contracts";
+import type { Leave, LeaveBalance } from "../types";
 
 // Ensure API calls use VITE_API_URL from env.
 // Example: const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -24,21 +36,20 @@ export type LeavesResponse = {
 
 export const getLeaves = async (params: LeavesQuery = {}) => {
   const res = await apiClient.get("/leaves/", { params });
-  const data = res.data as { results?: Leave[]; count?: number } | Leave[];
-  return {
-    results: unwrapList<Leave>(data),
-    count: (data as { count?: number }).count ?? unwrapList<Leave>(data).length,
-  } as LeavesResponse;
+  return normalizePaginatedList(
+    res.data as ApiPaginatedLeaveList | ApiLeave[],
+    normalizeLeave,
+  ) as LeavesResponse;
 };
 
-export const createLeave = async (data: Partial<Leave>) => {
+export const createLeave = async (data: ApiLeaveRequest) => {
   const res = await apiClient.post("/leaves/", data);
-  return res.data as Leave;
+  return normalizeLeave(res.data as ApiLeave);
 };
 
-export const updateLeave = async (id: string, data: Partial<Leave>) => {
+export const updateLeave = async (id: string, data: ApiPatchedLeaveRequest) => {
   const res = await apiClient.patch(`/leaves/${id}/`, data);
-  return res.data as Leave;
+  return normalizeLeave(res.data as ApiLeave);
 };
 
 export const deleteLeave = async (id: string) => {
@@ -48,12 +59,12 @@ export const deleteLeave = async (id: string) => {
 
 export const approveLeave = async (id: string, comment?: string) => {
   const res = await apiClient.post(`/leaves/${id}/approve/`, { comment });
-  return res.data as Leave;
+  return normalizeLeave(res.data as ApiLeave);
 };
 
 export const rejectLeave = async (id: string, comment?: string) => {
   const res = await apiClient.post(`/leaves/${id}/reject/`, { comment });
-  return res.data as Leave;
+  return normalizeLeave(res.data as ApiLeave);
 };
 
 export const uploadLeaveAttachment = async (id: string, file: File) => {
@@ -66,15 +77,20 @@ export const uploadLeaveAttachment = async (id: string, file: File) => {
 };
 
 export const getLeaveBalances = async (employee?: string) => {
-  const res = await apiClient.get("/leaves/balances/", { params: employee ? { employee } : {} });
-  return res.data as LeaveBalance[];
+  const res = await apiClient.get("/leave-balances/", { params: employee ? { employee } : {} });
+  return (Array.isArray(res.data) ? res.data : []).map((item) =>
+    normalizeLeaveBalance(item as ApiLeaveBalance),
+  );
 };
 
 export const getLeavesReport = async (
   params: { start?: string; end?: string; status?: string; leave_type?: string; department?: string; job_title?: string; employee?: string } = {},
 ) => {
   const res = await apiClient.get("/leaves/report/", { params });
-  return unwrapList<Leave>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedLeaveList | ApiLeave[],
+    normalizeLeave,
+  ).results;
 };
 
 // Example: server-side validation before sending to the API

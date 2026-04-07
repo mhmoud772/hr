@@ -1,4 +1,7 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeDepartment } from "@/shared/lib/normalizers/employees";
+import type { ApiDepartment, ApiPaginatedDepartmentList, ApiDepartmentRequest, ApiPatchedDepartmentRequest } from "@/types/contracts";
 import type { Department } from "@/types/api";
 
 export type DepartmentsQuery = {
@@ -10,17 +13,20 @@ export type DepartmentsQuery = {
 
 export const getDepartments = async (params: DepartmentsQuery = {}) => {
   const res = await apiClient.get("/departments/", { params });
-  return unwrapList<Department>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedDepartmentList | ApiDepartment[],
+    normalizeDepartment,
+  ).results;
 };
 
-export const createDepartment = async (data: Partial<Department>) => {
+export const createDepartment = async (data: ApiDepartmentRequest) => {
   const res = await apiClient.post("/departments/", data);
-  return res.data as Department;
+  return normalizeDepartment(res.data as ApiDepartment);
 };
 
-export const updateDepartment = async (id: string, data: Partial<Department>) => {
+export const updateDepartment = async (id: string, data: ApiPatchedDepartmentRequest) => {
   const res = await apiClient.patch(`/departments/${id}/`, data);
-  return res.data as Department;
+  return normalizeDepartment(res.data as ApiDepartment);
 };
 
 export const deleteDepartment = async (id: string) => {

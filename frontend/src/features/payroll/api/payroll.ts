@@ -1,5 +1,8 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { PayrollRecord } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizePayrollRecord } from "@/shared/lib/normalizers/features";
+import type { ApiPaginatedPayrollRecordList, ApiPayrollRecord, ApiPayrollRecordRequest, ApiPatchedPayrollRecordRequest } from "@/types/contracts";
+import type { PayrollRecord } from "../types";
 
 export type PayrollQuery = {
   employee?: string;
@@ -13,7 +16,10 @@ export const getPayroll = async (params: PayrollQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/payroll/", { params: mapped });
-  return unwrapList<PayrollRecord>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedPayrollRecordList | ApiPayrollRecord[],
+    normalizePayrollRecord,
+  ).results;
 };
 
 export const getPayrollReport = async (params: PayrollQuery & { start?: string; end?: string } = {}) => {
@@ -23,17 +29,20 @@ export const getPayrollReport = async (params: PayrollQuery & { start?: string; 
     delete mapped.employee;
   }
   const res = await apiClient.get("/payroll/report/", { params: mapped });
-  return unwrapList<PayrollRecord>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedPayrollRecordList | ApiPayrollRecord[],
+    normalizePayrollRecord,
+  ).results;
 };
 
-export const createPayroll = async (data: Partial<PayrollRecord>) => {
+export const createPayroll = async (data: ApiPayrollRecordRequest) => {
   const res = await apiClient.post("/payroll/", data);
-  return res.data as PayrollRecord;
+  return normalizePayrollRecord(res.data as ApiPayrollRecord);
 };
 
-export const updatePayroll = async (id: string, data: Partial<PayrollRecord>) => {
+export const updatePayroll = async (id: string, data: ApiPatchedPayrollRecordRequest) => {
   const res = await apiClient.patch(`/payroll/${id}/`, data);
-  return res.data as PayrollRecord;
+  return normalizePayrollRecord(res.data as ApiPayrollRecord);
 };
 
 export const deletePayroll = async (id: string) => {

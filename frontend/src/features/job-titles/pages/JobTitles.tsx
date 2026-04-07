@@ -1,6 +1,6 @@
 
-import { useMemo, useState } from "react";
-import { FileText, Plus, Edit, Trash2, Eye, Users, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Plus, Edit, Trash2, Eye, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -39,18 +39,24 @@ import { useAuth } from "@/features/auth/components/AuthProvider";
 import { useJobTitlesQuery, useCreateJobTitle, useUpdateJobTitle, useDeleteJobTitle } from "@/features/job-titles/hooks/useJobTitles";
 import { useDepartmentsQuery } from "@/features/structure/hooks/useDepartments";
 import type { JobTitle } from "@/types/api";
+import { PageHero } from "@/shared/components/PageHero";
+import { TableToolbar } from "@/shared/components/TableToolbar";
+import { parseSortValue, sortRows } from "@/shared/lib/tableUtils";
+import { IconActionButton } from "@/shared/components/IconActionButton";
 
 const levels = ["executive", "manager", "specialist", "junior"] as const;
 
 export default function JobTitles() {
   const { t, i18n } = useTranslation();
-  const isRtl = i18n.language === "ar";
+  const isRtl = i18n.language?.startsWith("ar");
   const { toast } = useToast();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortValue, setSortValue] = useState("name:asc");
   const [formOpen, setFormOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -73,21 +79,44 @@ export default function JobTitles() {
     page,
     search: search || undefined,
     level: levelFilter === "all" ? undefined : levelFilter,
-    department__name: departmentFilter === "all" ? undefined : departmentFilter,
+    department: departmentFilter === "all" ? undefined : departmentFilter,
   });
 
   const createJobTitle = useCreateJobTitle();
   const updateJobTitle = useUpdateJobTitle();
   const deleteJobTitle = useDeleteJobTitle();
 
-  const jobTitles = jobTitlesQuery.data?.results ?? [];
+  useEffect(() => {
+    if (departmentFilter !== "all") {
+      setShowAdvancedFilters(true);
+    }
+  }, [departmentFilter]);
+
+  const jobTitles = useMemo(() => jobTitlesQuery.data?.results ?? [], [jobTitlesQuery.data]);
+  const { key: sortKey, direction } = parseSortValue(sortValue);
+  const sortedJobTitles = useMemo(
+    () =>
+      sortRows(
+        jobTitles,
+        sortKey,
+        direction,
+        {
+          name: (job) => job.name,
+          department: (job) => job.department,
+          level: (job) => job.level,
+        },
+      ),
+    [jobTitles, sortKey, direction],
+  );
   const totalCount = jobTitlesQuery.data?.count ?? jobTitles.length;
   const pageSize = 25;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const departmentOptions = useMemo(() => {
     const list = departmentsQuery.data || [];
-    return list.map((dept) => dept.name).filter(Boolean);
+    return list
+      .map((dept) => ({ id: String(dept.id), name: dept.name }))
+      .filter((dept) => Boolean(dept.name));
   }, [departmentsQuery.data]);
 
   const handleAdd = () => {
@@ -110,7 +139,7 @@ export default function JobTitles() {
     setFormData({
       name: job.name || "",
       nameEn: job.nameEn || "",
-      department: job.department || "",
+      department: job.departmentId || "",
       level: job.level || "",
       minSalary: job.minSalary ? String(job.minSalary) : "",
       maxSalary: job.maxSalary ? String(job.maxSalary) : "",
@@ -153,7 +182,7 @@ export default function JobTitles() {
     const payload: Partial<JobTitle> = {
       name: formData.name,
       nameEn: formData.nameEn,
-      department: formData.department,
+      departmentId: formData.department,
       level: formData.level,
       minSalary: Number(formData.minSalary),
       maxSalary: Number(formData.maxSalary),
@@ -204,56 +233,24 @@ export default function JobTitles() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t("job_titles_title")}</h1>
-          <p className="text-muted-foreground">{t("job_titles_subtitle")}</p>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className={`w-4 h-4 absolute ${isRtl ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-muted-foreground`} />
-            <Input
-              className={`${isRtl ? "pr-9" : "pl-9"} w-56`}
-              placeholder={t("search")}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder={t("department")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("status_all")}</SelectItem>
-              {departmentOptions.map((dept) => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={levelFilter} onValueChange={setLevelFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder={t("level")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("status_all")}</SelectItem>
-              {levels.map((level) => (
-                <SelectItem key={level} value={level}>{t(`level_${level}`)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={handleAdd} disabled={!canAdmin}>
-            <Plus className="w-4 h-4 ml-2" />
+    <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
+      <PageHero
+        title={t("job_titles_title")}
+        subtitle={t("job_titles_subtitle")}
+        icon={FileText}
+        actions={
+          <Button onClick={handleAdd} disabled={!canAdmin} className="gap-2">
+            <Plus className="w-4 h-4" />
             {t("add_job_title")}
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {levels.map((level) => {
           const count = jobTitles.filter((j) => j.level === level).length;
           return (
-            <Card key={level} className="bg-card border-none shadow-sm">
+            <Card key={level} className="bg-card/90 border border-border/60 shadow-sm">
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground">{t(`level_${level}`)}</p>
                 <p className="text-2xl font-bold">{count}</p>
@@ -263,7 +260,63 @@ export default function JobTitles() {
         })}
       </div>
 
-      <Card className="bg-card border-none shadow-sm">
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
+        <CardContent className="p-4">
+          <TableToolbar
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: t("search"),
+            }}
+            filters={
+              <>
+                <Select value={levelFilter} onValueChange={setLevelFilter}>
+                  <SelectTrigger className="w-full sm:w-40">
+                    <SelectValue placeholder={t("level")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("all_levels")}</SelectItem>
+                    {levels.map((level) => (
+                      <SelectItem key={level} value={level}>{t(`level_${level}`)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAdvancedFilters((prev) => !prev)}
+                >
+                  {showAdvancedFilters ? t("hide_filters") : t("advanced_filters")}
+                </Button>
+                {showAdvancedFilters && (
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="w-full sm:w-44">
+                      <SelectValue placeholder={t("department")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("all_departments")}</SelectItem>
+                      {departmentOptions.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
+            }
+            sort={{
+              value: sortValue,
+              onChange: setSortValue,
+              options: [
+                { value: "name:asc", label: t("sort_name_asc") },
+                { value: "department:asc", label: t("sort_department") },
+                { value: "level:asc", label: t("sort_level") },
+              ],
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/90 border border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
@@ -274,58 +327,109 @@ export default function JobTitles() {
           {jobTitles.length === 0 ? (
             <EmptyState title={t("no_data")} icon={FileText} />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("job_title")}</TableHead>
-                  <TableHead>{t("department")}</TableHead>
-                  <TableHead>{t("level")}</TableHead>
-                  <TableHead>{t("salary_range")}</TableHead>
-                  <TableHead>{t("employee_count")}</TableHead>
-                  <TableHead>{t("actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {jobTitles.map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell>
+            <>
+              <div className="md:hidden space-y-3">
+                {sortedJobTitles.map((job) => (
+                  <div key={job.id} className="rounded-lg border border-border/60 bg-background p-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-medium">{job.name}</p>
-                        <p className="text-sm text-muted-foreground">{job.nameEn}</p>
+                        <div className="text-sm font-semibold">{job.name}</div>
+                        <div className="text-xs text-muted-foreground">{job.nameEn || "-"}</div>
                       </div>
-                    </TableCell>
-                    <TableCell>{job.department || "-"}</TableCell>
-                    <TableCell>
                       <Badge variant="outline">{t(`level_${job.level}`)}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {formatSalary(Number(job.minSalary || 0))} - {formatSalary(Number(job.maxSalary || 0))}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="gap-1">
-                        <Users className="w-3 h-3" />
-                        {job.employee_count ?? 0}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleView(job)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(job)} disabled={!canAdmin}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(job)} disabled={!canAdmin}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
+                      <div>{t("department")}: <span className="text-foreground">{job.department || "-"}</span></div>
+                      <div>{t("salary_range")}: <span className="text-foreground">{formatSalary(Number(job.minSalary || 0))} - {formatSalary(Number(job.maxSalary || 0))}</span></div>
+                      <div>{t("employee_count")}: <span className="text-foreground">{job.employee_count ?? 0}</span></div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <IconActionButton label={t("view_details")} onClick={() => handleView(job)}>
+                        <Eye className="w-4 h-4" />
+                      </IconActionButton>
+                      <IconActionButton
+                        label={t("edit")}
+                        onClick={() => handleEdit(job)}
+                        disabled={!canAdmin}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </IconActionButton>
+                      <IconActionButton
+                        label={t("delete")}
+                        className="text-destructive"
+                        onClick={() => handleDelete(job)}
+                        disabled={!canAdmin}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </IconActionButton>
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("job_title")}</TableHead>
+                      <TableHead>{t("department")}</TableHead>
+                      <TableHead>{t("level")}</TableHead>
+                      <TableHead>{t("salary_range")}</TableHead>
+                      <TableHead>{t("employee_count")}</TableHead>
+                      <TableHead>{t("actions")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedJobTitles.map((job) => (
+                      <TableRow key={job.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{job.name}</p>
+                            <p className="text-sm text-muted-foreground">{job.nameEn}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{job.department || "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{t(`level_${job.level}`)}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {formatSalary(Number(job.minSalary || 0))} - {formatSalary(Number(job.maxSalary || 0))}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="gap-1">
+                            <Users className="w-3 h-3" />
+                            {job.employee_count ?? 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <IconActionButton label={t("view_details")} onClick={() => handleView(job)}>
+                              <Eye className="w-4 h-4" />
+                            </IconActionButton>
+                            <IconActionButton
+                              label={t("edit")}
+                              onClick={() => handleEdit(job)}
+                              disabled={!canAdmin}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </IconActionButton>
+                            <IconActionButton
+                              label={t("delete")}
+                              className="text-destructive"
+                              onClick={() => handleDelete(job)}
+                              disabled={!canAdmin}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </IconActionButton>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mt-4">
             <p className="text-sm text-muted-foreground">
               {page} / {totalPages}
             </p>
@@ -342,12 +446,12 @@ export default function JobTitles() {
       </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-lg" dir="rtl">
+        <DialogContent className="max-w-lg" dir={isRtl ? "rtl" : "ltr"}>
           <DialogHeader>
             <DialogTitle>{selectedJob ? t("edit") : t("add_job_title")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("job_title_ar")}</Label>
                 <Input
@@ -366,7 +470,7 @@ export default function JobTitles() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("department")}</Label>
                 <Select
@@ -378,7 +482,7 @@ export default function JobTitles() {
                   </SelectTrigger>
                   <SelectContent>
                     {departmentOptions.map((dept) => (
-                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -402,7 +506,7 @@ export default function JobTitles() {
                 {formErrors.level && <p className="text-xs text-destructive">{formErrors.level}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("min_salary")}</Label>
                 <Input
@@ -478,3 +582,5 @@ export default function JobTitles() {
     </div>
   );
 }
+
+

@@ -1,5 +1,8 @@
-import { apiClient, unwrapList } from "@/shared/lib/api-client";
-import type { TrainingRecord } from "@/types/api";
+import { apiClient } from "@/shared/lib/api-client";
+import { normalizePaginatedList } from "@/shared/lib/normalizers/base";
+import { normalizeTrainingRecord } from "@/shared/lib/normalizers/features";
+import type { ApiPaginatedTrainingRecordList, ApiTrainingRecord, ApiTrainingRecordRequest, ApiPatchedTrainingRecordRequest } from "@/types/contracts";
+import type { TrainingRecord } from "../types";
 
 export type TrainingQuery = {
   employee?: string;
@@ -15,7 +18,10 @@ export const getTrainingRecords = async (params: TrainingQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/training/", { params: mapped });
-  return unwrapList<TrainingRecord>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedTrainingRecordList | ApiTrainingRecord[],
+    normalizeTrainingRecord,
+  ).results;
 };
 
 export const getTrainingReport = async (params: TrainingQuery = {}) => {
@@ -25,17 +31,20 @@ export const getTrainingReport = async (params: TrainingQuery = {}) => {
     delete mapped.employee;
   }
   const res = await apiClient.get("/training/report/", { params: mapped });
-  return unwrapList<TrainingRecord>(res.data);
+  return normalizePaginatedList(
+    res.data as ApiPaginatedTrainingRecordList | ApiTrainingRecord[],
+    normalizeTrainingRecord,
+  ).results;
 };
 
-export const createTrainingRecord = async (data: Partial<TrainingRecord>) => {
+export const createTrainingRecord = async (data: ApiTrainingRecordRequest) => {
   const res = await apiClient.post("/training/", data);
-  return res.data as TrainingRecord;
+  return normalizeTrainingRecord(res.data as ApiTrainingRecord);
 };
 
-export const updateTrainingRecord = async (id: string, data: Partial<TrainingRecord>) => {
+export const updateTrainingRecord = async (id: string, data: ApiPatchedTrainingRecordRequest) => {
   const res = await apiClient.patch(`/training/${id}/`, data);
-  return res.data as TrainingRecord;
+  return normalizeTrainingRecord(res.data as ApiTrainingRecord);
 };
 
 export const deleteTrainingRecord = async (id: string) => {

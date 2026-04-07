@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UsersQuery } from "@/features/users/api/users";
-import { createUser, deleteUser, getUsers, updateUser } from "@/features/users/api/users";
+import { createUser, deleteUser, getUsers, inviteUsers, updateUser } from "@/features/users/api/users";
 
 export function useUsersQuery(params: UsersQuery) {
   return useQuery({
@@ -30,6 +30,14 @@ export function useDeleteUser() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: deleteUser,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useInviteUsers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: inviteUsers,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   });
 }

@@ -1,8 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HR Companion</title>
     <meta name="description" content="HR Companion dashboard" />
@@ -19,6 +21,49 @@
     <meta name="twitter:title" content="HR Companion" />
     <meta name="twitter:description" content="HR Companion dashboard" />
     <meta name="twitter:image" content="/placeholder.svg" />
+    <script>
+      (function () {
+        var localHosts = ["localhost", "127.0.0.1", "::1"];
+        if (!localHosts.includes(window.location.hostname)) return;
+
+        if ("serviceWorker" in navigator) {
+          var originalRegister = navigator.serviceWorker.register.bind(
+            navigator.serviceWorker,
+          );
+          navigator.serviceWorker.register = function () {
+            return Promise.resolve(
+              navigator.serviceWorker.ready.catch(function () {
+                return undefined;
+              }),
+            );
+          };
+
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (registrations) {
+              return Promise.all(
+                registrations.map(function (registration) {
+                  return registration.unregister();
+                }),
+              );
+            })
+            .catch(function () {});
+        }
+
+        if ("caches" in window) {
+          caches
+            .keys()
+            .then(function (keys) {
+              return Promise.all(
+                keys.map(function (key) {
+                  return caches.delete(key);
+                }),
+              );
+            })
+            .catch(function () {});
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

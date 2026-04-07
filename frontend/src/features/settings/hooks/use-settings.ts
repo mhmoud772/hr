@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getSettings, updateSettings } from "@/features/settings/api/settings";
-import type { SettingsPayload } from "@/types/api";
+import type { ApiSettings, ApiSettingsRequest } from "@/types/contracts";
 
 type UseSettingsResult<T> = {
   value: T;
@@ -13,7 +14,17 @@ type UseSettingsResult<T> = {
   reset: () => void;
 };
 
-export function useSettings<T>(key: keyof SettingsPayload, initialValue: T): UseSettingsResult<T> {
+type UseSettingsOptions = {
+  enabled?: boolean;
+};
+
+export function useSettings<T>(
+  key: keyof ApiSettings,
+  initialValue: T,
+  options: UseSettingsOptions = {},
+): UseSettingsResult<T> {
+  const enabled = options.enabled !== false;
+  const queryClient = useQueryClient();
   const [value, setValue] = useState<T>(() => {
     const saved = localStorage.getItem(key);
     if (saved) {
@@ -25,16 +36,21 @@ export function useSettings<T>(key: keyof SettingsPayload, initialValue: T): Use
     }
     return initialValue;
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
   const reload = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const apiSettings = await getSettings();
+      queryClient.setQueryData(["settings"], apiSettings);
       if (apiSettings && Object.prototype.hasOwnProperty.call(apiSettings, key)) {
         const next = apiSettings[key] as T;
         const merged =
@@ -49,21 +65,30 @@ export function useSettings<T>(key: keyof SettingsPayload, initialValue: T): Use
     } finally {
       setLoading(false);
     }
-  }, [key, initialValue]);
+  }, [enabled, key, initialValue, queryClient]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (mountedRef.current) return;
     mountedRef.current = true;
     reload().catch(() => {});
-  }, [reload]);
+  }, [enabled, reload]);
 
   const save = useCallback(
     async (override?: T) => {
+      if (!enabled) {
+        setError("Not authorized to access this settings section");
+        return false;
+      }
       setSaving(true);
       setError(null);
       try {
-        const payload = { [key]: override ?? value } as SettingsPayload;
-        const saved = await updateSettings(payload);
+        const apiPayload = { [key]: override ?? value } as ApiSettingsRequest;
+        const saved = await updateSettings(apiPayload);
+        queryClient.setQueryData(["settings"], saved);
         if (saved && Object.prototype.hasOwnProperty.call(saved, key)) {
           const next = saved[key] as T;
           const merged =
@@ -83,7 +108,7 @@ export function useSettings<T>(key: keyof SettingsPayload, initialValue: T): Use
         setSaving(false);
       }
     },
-    [key, value, initialValue],
+    [enabled, key, value, initialValue, queryClient],
   );
 
   const reset = useCallback(() => {
