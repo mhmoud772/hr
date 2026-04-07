@@ -2,7 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set registry https://registry.npmjs.org/ \
+  && npm ci
 
 COPY . .
 ARG VITE_API_URL
