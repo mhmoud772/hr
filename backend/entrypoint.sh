@@ -30,6 +30,7 @@ else:
 PY
 
 python manage.py migrate --noinput
+python manage.py migrate --database analytical --noinput
 python manage.py collectstatic --noinput || true
 
 python - <<'PY'
