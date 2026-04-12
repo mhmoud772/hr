@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $root ".venv\\Scripts\\python.exe"
 $dbPath = Join-Path $root "run-local.sqlite3"
+$analyticalDbPath = Join-Path $root "analytical.sqlite3"
 
 if (-not (Test-Path $python)) {
     throw "Python virtual environment not found at $python"
@@ -12,6 +13,10 @@ Write-Host "Preparing local runtime database at $dbPath" -ForegroundColor Cyan
 
 if (Test-Path $dbPath) {
     Remove-Item -LiteralPath $dbPath -Force
+}
+
+if (Test-Path $analyticalDbPath) {
+    Remove-Item -LiteralPath $analyticalDbPath -Force
 }
 
 $env:DB_ENGINE = "sqlite"
@@ -47,7 +52,7 @@ try {
     Write-Host "`nLocal runtime environment is ready!" -ForegroundColor Green
     Write-Host "--------------------------------------"
     Write-Host "Main Database:       $dbPath"
-    Write-Host "Analytical Database: analytical.sqlite3"
+    Write-Host "Analytical Database: $analyticalDbPath"
     Write-Host "Demo user:           admin / admin123"
     Write-Host "--------------------------------------"
 }

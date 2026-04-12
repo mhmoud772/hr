@@ -130,38 +130,45 @@ export function DeviceAdvancedControlPanel({
   const restoreBackupMutation = useRestoreDeviceBackup();
 
   const commandLabels = useMemo<Record<string, string>>(
-    () =>
-      isRtl
-        ? {
-            sync: "مزامنة",
-            sync_time: "مزامنة الوقت",
-            reboot: "إعادة تشغيل",
-            pull_logs: "سحب السجلات",
-            push_employee: "ترحيل موظف",
-            disable_employee: "تعطيل موظف",
-            enable_employee: "تفعيل موظف",
-            delete_employee: "حذف موظف",
-            clear_logs: "مسح السجلات",
-            apply_policy: "تطبيق سياسة",
-            distribute_template: "ترحيل قالب",
-            firmware_rollout: "ترقية Firmware",
-          }
-        : {
-            sync: "Sync",
-            sync_time: "Sync Time",
-            reboot: "Reboot",
-            pull_logs: "Pull Logs",
-            push_employee: "Push Employee",
-            disable_employee: "Disable Employee",
-            enable_employee: "Enable Employee",
-            delete_employee: "Delete Employee",
-            clear_logs: "Clear Logs",
-            apply_policy: "Apply Policy",
-            distribute_template: "Distribute Template",
-            firmware_rollout: "Firmware Rollout",
-          },
-    [isRtl],
+    () => ({
+      sync: t("device_command_sync", { defaultValue: "Sync" }),
+      sync_time: t("device_command_sync_time", { defaultValue: "Sync Time" }),
+      reboot: t("device_command_reboot", { defaultValue: "Reboot" }),
+      pull_logs: t("device_command_pull_logs", { defaultValue: "Pull Logs" }),
+      push_employee: t("device_command_push_employee", { defaultValue: "Push Employee" }),
+      disable_employee: t("device_command_disable_employee", { defaultValue: "Disable Employee" }),
+      enable_employee: t("device_command_enable_employee", { defaultValue: "Enable Employee" }),
+      delete_employee: t("device_command_delete_employee", { defaultValue: "Delete Employee" }),
+      clear_logs: t("device_command_clear_logs", { defaultValue: "Clear Logs" }),
+      apply_policy: t("device_command_apply_policy", { defaultValue: "Apply Policy" }),
+      distribute_template: t("device_command_distribute_template", { defaultValue: "Distribute Template" }),
+      firmware_rollout: t("device_command_firmware_rollout", { defaultValue: "Firmware Rollout" }),
+    }),
+    [t],
   );
+
+  const getVerificationModeLabel = (mode?: string | null) =>
+    t(`verification_mode_${mode || "any"}`, {
+      defaultValue:
+        mode === "fingerprint"
+          ? "Fingerprint"
+          : mode === "face"
+            ? "Face"
+            : mode === "card"
+              ? "Card"
+              : "Any",
+    });
+
+  const getBackupScopeLabel = (scope?: string | null) =>
+    t(`backup_scope_${scope || "single"}`, {
+      defaultValue: scope === "group" ? "Group" : scope === "global" ? "Global" : "Single device",
+    });
+
+  const getStatusLabel = (status?: string | null) =>
+    t(`status_${status || "draft"}`, {
+      defaultValue:
+        status?.replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()) || "Draft",
+    });
 
   const commandOptions = useMemo(() => {
     if (catalogQuery.data?.commands?.length) return catalogQuery.data.commands;
@@ -537,7 +544,7 @@ export function DeviceAdvancedControlPanel({
                     {commandOptions.map((item) => (
                       <SelectItem key={item.code} value={item.code}>
                         {commandLabels[item.code] || item.code}
-                        {item.sensitive ? (isRtl ? " (حساس)" : " (Sensitive)") : ""}
+                        {item.sensitive ? ` (${t("sensitive_short", { defaultValue: "Sensitive" })})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -640,7 +647,7 @@ export function DeviceAdvancedControlPanel({
                     <SelectContent>
                       {rollouts.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.target_version} ({item.status || "draft"})
+                          {item.target_version} ({getStatusLabel(item.status || "draft")})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -685,7 +692,7 @@ export function DeviceAdvancedControlPanel({
                         {approval.reason || t("no_reason", { defaultValue: "No reason provided" })}
                       </p>
                     </div>
-                    <Badge variant="warning">{approval.status}</Badge>
+                    <Badge variant="warning">{getStatusLabel(approval.status)}</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {t("targets", { defaultValue: "Targets" })}: {approval.deviceIds?.length || 0} -{" "}
@@ -782,10 +789,10 @@ export function DeviceAdvancedControlPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="any">{isRtl ? "أي طريقة" : "Any"}</SelectItem>
-                    <SelectItem value="fingerprint">{isRtl ? "بصمة" : "Fingerprint"}</SelectItem>
-                    <SelectItem value="face">{isRtl ? "وجه" : "Face"}</SelectItem>
-                    <SelectItem value="card">{isRtl ? "بطاقة" : "Card"}</SelectItem>
+                    <SelectItem value="any">{getVerificationModeLabel("any")}</SelectItem>
+                    <SelectItem value="fingerprint">{getVerificationModeLabel("fingerprint")}</SelectItem>
+                    <SelectItem value="face">{getVerificationModeLabel("face")}</SelectItem>
+                    <SelectItem value="card">{getVerificationModeLabel("card")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -805,7 +812,7 @@ export function DeviceAdvancedControlPanel({
                       <Badge variant="outline">{policy.deviceCount ?? 0}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {(policy.timezone || "UTC") + " - " + (policy.verification_mode || "any")}
+                      {(policy.timezone || "UTC") + " - " + getVerificationModeLabel(policy.verification_mode || "any")}
                     </p>
                   </div>
                 ))}
@@ -823,7 +830,7 @@ export function DeviceAdvancedControlPanel({
                 <div key={item.id} className="rounded border border-border/50 px-2 py-1.5 text-xs">
                   <p className="font-medium">{item.employeeCode}</p>
                   <p className="text-muted-foreground">
-                    {item.templateType || "fingerprint"} #{item.templateIndex ?? 0} - v{item.version ?? 1}
+                    {getVerificationModeLabel(item.templateType || "fingerprint")} #{item.templateIndex ?? 0} - v{item.version ?? 1}
                   </p>
                 </div>
               ))}
@@ -847,7 +854,7 @@ export function DeviceAdvancedControlPanel({
                             : "warning"
                       }
                     >
-                      {item.status || "draft"}
+                      {getStatusLabel(item.status || "draft")}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
@@ -879,7 +886,7 @@ export function DeviceAdvancedControlPanel({
                 <div key={item.id} className="rounded border border-border/50 px-2 py-1.5 text-xs space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="font-medium">{item.name}</p>
-                    <Badge variant="outline">{item.scope}</Badge>
+                    <Badge variant="outline">{getBackupScopeLabel(item.scope)}</Badge>
                   </div>
                   <p className="text-muted-foreground">{formatDate(item.created_at)}</p>
                   <div className="flex items-center justify-between">

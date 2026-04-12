@@ -51,8 +51,14 @@ class DepartmentDistributionSnapshot(models.Model):
     """
     date = models.DateField()
     department_name = models.CharField(max_length=255)
+    department_name_en = models.CharField(max_length=255, blank=True)
     employee_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_localized_department_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.department_name_en:
+            return self.department_name_en
+        return self.department_name
 
     class Meta:
         ordering = ["-date", "-employee_count"]
@@ -68,9 +74,15 @@ class SystemActivityFact(models.Model):
     activity_id = models.CharField(max_length=255, unique=True)
     employee_name = models.CharField(max_length=255)
     action = models.CharField(max_length=255)
+    action_en = models.CharField(max_length=255, blank=True)
     time = models.DateTimeField()
     activity_type = models.CharField(max_length=50) # 'attendance', 'leave', etc.
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_localized_action(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.action_en:
+            return self.action_en
+        return self.action
 
     class Meta:
         ordering = ["-time"]

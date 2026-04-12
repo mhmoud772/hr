@@ -3,14 +3,29 @@ from django.db import models
 
 class Shift(models.Model):
     name = models.CharField(max_length=100)
+    name_en = models.CharField(max_length=100, blank=True)
     start_time = models.TimeField()
     end_time = models.TimeField()
     grace_period_minutes = models.PositiveIntegerField(default=15)
     description = models.TextField(blank=True)
+    description_en = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self) -> str:
         return self.name
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_description(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.description_en:
+            return self.description_en
+        return self.description
 
 
 class EmployeeShift(models.Model):

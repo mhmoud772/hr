@@ -26,7 +26,11 @@ class AnalyticalService:
     # --- Data Serving Methods (Query Analytical Store ONLY) ---
 
     @staticmethod
-    def get_dashboard_stats(days_range=30):
+    def normalize_language(language: str | None = None) -> str:
+        return "en" if (language or "").lower().startswith("en") else "ar"
+
+    @staticmethod
+    def get_dashboard_stats(days_range=30, language: str | None = None):
         """
         Retrieves the latest dashboard KPIs and trends from the analytical store.
         Does NOT touch operational tables (Employee, Attendance, etc.).
@@ -40,9 +44,11 @@ class AnalyticalService:
             return AnalyticalService._get_empty_stats()
 
         # Get department distribution (use same date as latest snapshot)
+        normalized_language = AnalyticalService.normalize_language(language)
         dept_dist = DepartmentDistributionSnapshot.objects.filter(date=latest_snap.date)
         department_distribution = [
-            {"name": d.department_name, "value": d.employee_count} for d in dept_dist
+            {"name": d.get_localized_department_name(normalized_language), "value": d.employee_count}
+            for d in dept_dist
         ]
 
         # Get recent activities (Facts)
@@ -51,7 +57,7 @@ class AnalyticalService:
             {
                 "id": a.activity_id, 
                 "name": a.employee_name, 
-                "action": a.action, 
+                "action": a.get_localized_action(normalized_language), 
                 "time": a.time.isoformat(), 
                 "type": a.activity_type
             }
@@ -96,11 +102,11 @@ class AnalyticalService:
         return [{"date": metric.date.isoformat(), "rate": metric.adherence_rate} for metric in trend_metrics]
 
     @staticmethod
-    def get_ai_context_snapshot():
+    def get_ai_context_snapshot(language: str | None = None):
         """
         Returns a simplified JSON snapshot of the system state for LLM context.
         """
-        stats = AnalyticalService.get_dashboard_stats()
+        stats = AnalyticalService.get_dashboard_stats(language=language)
         return {
             "headcount": stats.get("totalEmployees", 0),
             "attendance": {
@@ -155,8 +161,18 @@ class AnalyticalService:
     @staticmethod
     def _compute_daily_metrics(target_date):
         """Internal helper to aggregate operational data."""
-        total_employees = Employee.objects.filter(status="active").count()
-        present_today = Attendance.objects.filter(date=target_date, status__in=["present", "late"]).count()
+        workforce = Employee.objects.exclude(status="inactive")
+        total_employees = workforce.count()
+        present_today = (
+            Attendance.objects.filter(
+                date=target_date,
+                status__in=["present", "late"],
+                employee__status__in=["active", "leave"],
+            )
+            .values("employee_id")
+            .distinct()
+            .count()
+        )
         current_leaves = Leave.objects.filter(
             status="approved", 
             start_date__lte=target_date, 
@@ -174,13 +190,22 @@ class AnalyticalService:
         
         # 30-day Adherence Rate
         window_start = target_date - timedelta(days=30)
-        history = Attendance.objects.filter(date__gte=window_start, date__lte=target_date)
+        history = Attendance.objects.filter(
+            date__gte=window_start,
+            date__lte=target_date,
+            employee__status__in=["active", "leave"],
+        )
         total_count = history.count()
         present_count = history.filter(status__in=["present", "late"]).count()
         adherence_rate = round((present_count / total_count) * 100, 1) if total_count else 0.0
 
         # Late minutes (avg)
-        late_records = Attendance.objects.filter(date=target_date, status="late", check_in__isnull=False)
+        late_records = Attendance.objects.filter(
+            date=target_date,
+            status="late",
+            check_in__isnull=False,
+            employee__status__in=["active", "leave"],
+        )
         total_late_min = 0
         for rec in late_records:
             # Simple assumption: Shift starts at 08:00
@@ -202,11 +227,14 @@ class AnalyticalService:
     @staticmethod
     def _refresh_department_distribution(target_date):
         DepartmentDistributionSnapshot.objects.filter(date=target_date).delete()
-        departments = Department.objects.annotate(count=Count("employee"))
+        departments = Department.objects.annotate(
+            count=Count("employee", filter=models.Q(employee__status__in=["active", "leave"]))
+        )
         for dept in departments:
             DepartmentDistributionSnapshot.objects.create(
                 date=target_date,
                 department_name=dept.name,
+                department_name_en=dept.name_en,
                 employee_count=dept.count,
             )
 
@@ -214,33 +242,48 @@ class AnalyticalService:
     def _refresh_activity_facts(target_date):
         # Refresh facts for the target date
         SystemActivityFact.objects.filter(date=target_date).delete()
-        
+
         # Attendance Facts
-        attendance = Attendance.objects.filter(date=target_date).select_related("employee")[:50]
+        attendance = Attendance.objects.filter(
+            date=target_date,
+            employee__status__in=["active", "leave"],
+        ).select_related("employee")[:50]
         for item in attendance:
-            SystemActivityFact.objects.create(
-                date=target_date,
+            is_present = item.status in {"present", "late"}
+            SystemActivityFact.objects.update_or_create(
                 activity_id=f"attendance-{item.id}",
-                employee_name=item.employee.name,
-                action="سجل حضورًا" if item.status in {"present", "late"} else "سُجل غيابًا",
-                time=item.created_at,
-                activity_type="attendance"
+                defaults={
+                    "date": target_date,
+                    "employee_name": item.employee.name,
+                    "action": "\u0633\u062c\u0644 \u062d\u0636\u0648\u0631\u064b\u0627" if is_present else "\u0633\u062c\u0644 \u063a\u064a\u0627\u0628\u064b\u0627",
+                    "action_en": "Checked in" if is_present else "Marked absent",
+                    "time": item.created_at,
+                    "activity_type": "attendance",
+                },
             )
 
         # Leave Facts
         leaves = Leave.objects.filter(updated_at__date=target_date).select_related("employee")[:50]
         for item in leaves:
-            SystemActivityFact.objects.create(
-                date=target_date,
+            action_pairs = {
+                "pending": ("\u0642\u062f\u0651\u0645 \u0637\u0644\u0628 \u0625\u062c\u0627\u0632\u0629", "Submitted a leave request"),
+                "approved": ("\u062a\u0645\u062a \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629 \u0639\u0644\u0649 \u0637\u0644\u0628 \u0627\u0644\u0625\u062c\u0627\u0632\u0629", "Leave request approved"),
+                "rejected": ("\u062a\u0645 \u0631\u0641\u0636 \u0637\u0644\u0628 \u0627\u0644\u0625\u062c\u0627\u0632\u0629", "Leave request rejected"),
+            }
+            action_ar, action_en = action_pairs.get(
+                item.status,
+                ("\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0637\u0644\u0628 \u0627\u0644\u0625\u062c\u0627\u0632\u0629", "Leave request updated"),
+            )
+            SystemActivityFact.objects.update_or_create(
                 activity_id=f"leave-{item.id}",
-                employee_name=item.employee.name,
-                action={
-                    "pending": "قُدم طلب إجازة",
-                    "approved": "تمت الموافقة على طلب الإجازة",
-                    "rejected": "تم رفض طلب الإجازة",
-                }.get(item.status, "تم تحديث طلب الإجازة"),
-                time=item.updated_at,
-                activity_type="leave"
+                defaults={
+                    "date": target_date,
+                    "employee_name": item.employee.name,
+                    "action": action_ar,
+                    "action_en": action_en,
+                    "time": item.updated_at,
+                    "activity_type": "leave",
+                },
             )
 
     @staticmethod

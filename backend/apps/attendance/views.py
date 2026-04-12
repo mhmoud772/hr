@@ -92,7 +92,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             message="Attendance import request recorded.",
         )
         return Response(
-            AttendanceImportLogSerializer(log).data,
+            AttendanceImportLogSerializer(log, context={"request": request}).data,
             status=status.HTTP_202_ACCEPTED,
         )
 
@@ -102,7 +102,7 @@ class ShiftViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["name"]
-    search_fields = ["name", "description"]
+    search_fields = ["name", "name_en", "description", "description_en"]
     ordering_fields = ["name", "start_time", "end_time", "created_at"]
 
 class EmployeeShiftViewSet(viewsets.ModelViewSet):
@@ -111,7 +111,7 @@ class EmployeeShiftViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["employee__employee_code", "shift", "employee"]
-    search_fields = ["employee__name", "employee__employee_code", "shift__name"]
+    search_fields = ["employee__name", "employee__employee_code", "shift__name", "shift__name_en"]
     ordering_fields = ["start_date", "end_date", "created_at"]
 
 class BiometricLogViewSet(viewsets.ReadOnlyModelViewSet):

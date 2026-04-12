@@ -258,9 +258,10 @@ def _prepare_task_payload(command: str, payload: dict):
     return {}
 
 
-def _enqueue_command_for_device(*, user, device, command: str, payload: dict, reason: str):
+def _enqueue_command_for_device(*, user, device, command: str, payload: dict, reason: str, request=None):
     task = _resolve_task(command)
     message = _command_message(command, payload)
+    serializer_context = {"request": request} if request else {}
     log = DeviceSyncLog.objects.create(
         device=device,
         command=command,
@@ -311,7 +312,7 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
             return {
                 "ok": False,
                 "status_code": status.HTTP_400_BAD_REQUEST,
-                "data": {"detail": str(exc), "code": "ADMS_COMMAND_UNSUPPORTED", "log": DeviceSyncLogSerializer(log).data},
+                "data": {"detail": str(exc), "code": "ADMS_COMMAND_UNSUPPORTED", "log": DeviceSyncLogSerializer(log, context=serializer_context).data},
             }
         except Exception as exc:
             log.status = "failed"
@@ -331,7 +332,7 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
                 "data": {
                     "detail": "Failed to queue ADMS command",
                     "error": str(exc),
-                    "log": DeviceSyncLogSerializer(log).data,
+                    "log": DeviceSyncLogSerializer(log, context=serializer_context).data,
                 },
             }
 
@@ -353,7 +354,7 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
                 "channel": "adms",
                 "queueSize": pending_count,
                 "commandText": queued_item.get("commandText", ""),
-                "log": DeviceSyncLogSerializer(log).data,
+                "log": DeviceSyncLogSerializer(log, context=serializer_context).data,
             },
         }
 
@@ -372,7 +373,7 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
         return {
             "ok": False,
             "status_code": status.HTTP_503_SERVICE_UNAVAILABLE,
-            "data": {"detail": "Task worker is not configured.", "log": DeviceSyncLogSerializer(log).data},
+            "data": {"detail": "Task worker is not configured.", "log": DeviceSyncLogSerializer(log, context=serializer_context).data},
         }
 
     try:
@@ -399,7 +400,7 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
                         "status": "executed_inline",
                         "inline": True,
                         "taskId": str(getattr(inline_result, "id", "") or ""),
-                        "log": DeviceSyncLogSerializer(log).data,
+                        "log": DeviceSyncLogSerializer(log, context=serializer_context).data,
                     },
                 }
             except Exception as inline_exc:
@@ -419,17 +420,17 @@ def _enqueue_command_for_device(*, user, device, command: str, payload: dict, re
         return {
             "ok": False,
             "status_code": status.HTTP_503_SERVICE_UNAVAILABLE,
-            "data": {"detail": "Failed to queue command", "error": str(exc), "log": DeviceSyncLogSerializer(log).data},
+            "data": {"detail": "Failed to queue command", "error": str(exc), "log": DeviceSyncLogSerializer(log, context=serializer_context).data},
         }
     return {
-        "ok": True,
-        "status_code": status.HTTP_202_ACCEPTED,
-        "data": {
-            "status": "queued",
-            "taskId": str(getattr(async_result, "id", "") or ""),
-            "log": DeviceSyncLogSerializer(log).data,
-        },
-    }
+            "ok": True,
+            "status_code": status.HTTP_202_ACCEPTED,
+            "data": {
+                "status": "queued",
+                "taskId": str(getattr(async_result, "id", "") or ""),
+                "log": DeviceSyncLogSerializer(log, context=serializer_context).data,
+            },
+        }
 
 
 class DeviceGroupViewSet(viewsets.ModelViewSet):
@@ -437,7 +438,7 @@ class DeviceGroupViewSet(viewsets.ModelViewSet):
     queryset = DeviceGroup.objects.all().annotate(device_total=Count("devices")).order_by("name", "id")
     serializer_class = DeviceGroupSerializer
     permission_classes = [IsAuthenticated, RolePermission]
-    search_fields = ["name", "description"]
+    search_fields = ["name", "name_en", "description", "description_en"]
     ordering_fields = ["name", "created_at"]
 
     @action(detail=True, methods=["get"], url_path="devices")
@@ -473,7 +474,7 @@ class DevicePolicyViewSet(viewsets.ModelViewSet):
     queryset = DevicePolicy.objects.all().annotate(device_total=Count("devices")).order_by("name", "id")
     serializer_class = DevicePolicySerializer
     permission_classes = [IsAuthenticated, RolePermission]
-    search_fields = ["name", "description", "timezone", "verification_mode"]
+    search_fields = ["name", "name_en", "description", "description_en", "timezone", "verification_mode"]
     ordering_fields = ["name", "created_at", "updated_at"]
 
     @action(detail=True, methods=["post"], url_path="apply")
@@ -506,6 +507,7 @@ class DevicePolicyViewSet(viewsets.ModelViewSet):
                 command="apply_policy",
                 payload=task_payload,
                 reason=reason,
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append(
@@ -653,6 +655,7 @@ class DeviceTemplateViewSet(viewsets.ModelViewSet):
             command="pull_template",
             payload=payload,
             reason=reason,
+            request=request,
         )
         if not result["ok"]:
             return Response(result["data"], status=result["status_code"])
@@ -696,6 +699,7 @@ class DeviceTemplateViewSet(viewsets.ModelViewSet):
                 command="distribute_template",
                 payload={"template_id": template.id},
                 reason=reason,
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append(
@@ -733,7 +737,7 @@ class DeviceTemplateViewSet(viewsets.ModelViewSet):
     def distribution_report(self, request, pk=None):
         template = self.get_object()
         rows = template.distributions.select_related("device", "requested_by")[:100]
-        serializer = BiometricTemplateDistributionSerializer(rows, many=True)
+        serializer = BiometricTemplateDistributionSerializer(rows, many=True, context={"request": request})
         return Response({"templateId": str(template.id), "count": len(serializer.data), "rows": serializer.data})
 
 
@@ -745,7 +749,7 @@ class DeviceCommandApprovalViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceCommandApprovalSerializer
     permission_classes = [IsAuthenticated, RolePermission]
     filterset_fields = ["status", "command"]
-    search_fields = ["command", "reason", "target_devices__name", "target_devices__serial_number"]
+    search_fields = ["command", "reason", "reason_en", "target_devices__name", "target_devices__name_en", "target_devices__serial_number"]
     ordering_fields = ["requested_at", "expires_at", "decided_at", "executed_at"]
 
     def perform_create(self, serializer):
@@ -769,6 +773,7 @@ class DeviceCommandApprovalViewSet(viewsets.ModelViewSet):
                 command=command,
                 payload=task_payload,
                 reason=reason,
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append(
@@ -851,7 +856,7 @@ class DeviceFirmwareRolloutViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceFirmwareRolloutSerializer
     permission_classes = [IsAuthenticated, RolePermission]
     filterset_fields = ["status", "device_group"]
-    search_fields = ["target_version", "notes", "device_group__name"]
+    search_fields = ["target_version", "notes", "notes_en", "device_group__name", "device_group__name_en"]
     ordering_fields = ["created_at", "started_at", "finished_at", "target_version"]
 
     @action(detail=True, methods=["post"], url_path="start")
@@ -887,6 +892,7 @@ class DeviceFirmwareRolloutViewSet(viewsets.ModelViewSet):
                 command="firmware_rollout",
                 payload={"rollout_id": rollout.id},
                 reason=f"Firmware rollout to {rollout.target_version}",
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append(
@@ -955,7 +961,7 @@ class DeviceBackupSnapshotViewSet(viewsets.ModelViewSet):
     serializer_class = DeviceBackupSnapshotSerializer
     permission_classes = [IsAuthenticated, RolePermission]
     filterset_fields = ["scope", "device", "device_group"]
-    search_fields = ["name", "device__name", "device_group__name"]
+    search_fields = ["name", "name_en", "device__name", "device__name_en", "device_group__name", "device_group__name_en"]
     ordering_fields = ["created_at", "restored_at", "name"]
 
     def perform_create(self, serializer):
@@ -976,6 +982,7 @@ class DeviceBackupSnapshotViewSet(viewsets.ModelViewSet):
                 {
                     "id": item.id,
                     "name": item.name,
+                    "name_en": item.name_en,
                     "serial_number": item.serial_number,
                     "ip_address": item.ip_address,
                     "port": item.port,
@@ -983,6 +990,7 @@ class DeviceBackupSnapshotViewSet(viewsets.ModelViewSet):
                     "firmware_version": item.firmware_version,
                     "platform": item.platform,
                     "location": item.location,
+                    "location_en": item.location_en,
                     "status": item.status,
                     "group_id": item.group_id,
                     "policy_id": item.policy_id,
@@ -1019,12 +1027,14 @@ class DeviceBackupSnapshotViewSet(viewsets.ModelViewSet):
             if not device:
                 continue
             device.name = row.get("name") or device.name
+            device.name_en = row.get("name_en") or device.name_en
             device.ip_address = row.get("ip_address") or device.ip_address
             device.port = int(row.get("port") or device.port)
             device.model = row.get("model") or device.model
             device.firmware_version = row.get("firmware_version") or device.firmware_version
             device.platform = row.get("platform") or device.platform
             device.location = row.get("location") or device.location
+            device.location_en = row.get("location_en") or device.location_en
             device.connection_mode = row.get("connection_mode") or device.connection_mode
             device.is_primary_enrollment = bool(row.get("is_primary_enrollment"))
             device.group_id = row.get("group_id") if row.get("group_id") else None
@@ -1151,6 +1161,7 @@ class DeviceCommandCenterViewSet(viewsets.ViewSet):
                 command=command,
                 payload=task_payload,
                 reason=reason,
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append(

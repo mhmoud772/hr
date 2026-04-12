@@ -117,5 +117,5 @@ class PolicyDocumentListView(views.APIView):
             )
 
         policies = PolicyDocument.objects.filter(is_active=True)
-        serializer = PolicyDocumentSerializer(policies, many=True)
+        serializer = PolicyDocumentSerializer(policies, many=True, context={"request": request})
         return response.Response(serializer.data)

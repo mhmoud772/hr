@@ -14,7 +14,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
-    search_fields = ["title", "body", "channel"]
+    search_fields = ["title", "title_en", "body", "body_en", "channel"]
     ordering_fields = ["created_at", "title", "channel", "status"]
 
     def get_queryset(self):

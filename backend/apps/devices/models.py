@@ -4,11 +4,23 @@ from django.db import models
 class DeviceGroup(models.Model):
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True)
+    name_en = models.CharField(max_length=120, blank=True)
+    description_en = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_description(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.description_en:
+            return self.description_en
+        return self.description
 
 
 class DevicePolicy(models.Model):
@@ -20,6 +32,8 @@ class DevicePolicy(models.Model):
     )
     name = models.CharField(max_length=120, unique=True)
     description = models.TextField(blank=True)
+    name_en = models.CharField(max_length=120, blank=True)
+    description_en = models.TextField(blank=True)
     timezone = models.CharField(max_length=64, default="UTC")
     heartbeat_interval_seconds = models.PositiveIntegerField(default=180)
     auto_sync_time = models.BooleanField(default=True)
@@ -30,6 +44,16 @@ class DevicePolicy(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_description(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.description_en:
+            return self.description_en
+        return self.description
 
 
 class Device(models.Model):
@@ -42,6 +66,7 @@ class Device(models.Model):
         ("adms", "ADMS Push"),
     )
     name = models.CharField(max_length=255)
+    name_en = models.CharField(max_length=255, blank=True)
     serial_number = models.CharField(max_length=255, unique=True)
     ip_address = models.GenericIPAddressField()
     port = models.PositiveIntegerField(default=4370)
@@ -50,6 +75,7 @@ class Device(models.Model):
     firmware_version = models.CharField(max_length=100, blank=True)
     platform = models.CharField(max_length=100, blank=True)
     location = models.CharField(max_length=255)
+    location_en = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="offline")
     last_sync = models.DateTimeField(null=True, blank=True)
     employee_count = models.PositiveIntegerField(default=0)
@@ -62,6 +88,16 @@ class Device(models.Model):
 
     class Meta:
         ordering = ["id"]
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_location(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.location_en:
+            return self.location_en
+        return self.location
 
 
 class DeviceUserMapping(models.Model):
@@ -91,6 +127,7 @@ class DeviceSyncLog(models.Model):
     command = models.CharField(max_length=40, blank=True)
     requested_by = models.ForeignKey("authentication.User", null=True, blank=True, on_delete=models.SET_NULL)
     reason = models.CharField(max_length=255, blank=True)
+    reason_en = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="running")
     message = models.TextField(blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
@@ -108,6 +145,7 @@ class DeviceCommandApproval(models.Model):
     command = models.CharField(max_length=40)
     payload = models.JSONField(default=dict, blank=True)
     reason = models.CharField(max_length=255, blank=True)
+    reason_en = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     requested_by = models.ForeignKey("authentication.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="dev_cmd_req")
     approved_by = models.ForeignKey("authentication.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="dev_cmd_appr")
@@ -165,6 +203,7 @@ class DeviceFirmwareRollout(models.Model):
     target_version = models.CharField(max_length=100)
     device_group = models.ForeignKey(DeviceGroup, null=True, blank=True, on_delete=models.SET_NULL)
     notes = models.TextField(blank=True)
+    notes_en = models.TextField(blank=True)
     rollout_plan = models.JSONField(default=dict, blank=True)
     results = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
@@ -175,11 +214,22 @@ class DeviceFirmwareRollout(models.Model):
 
 
 class DeviceBackupSnapshot(models.Model):
+    SCOPE_CHOICES = (
+        ("single", "Single"),
+        ("group", "Group"),
+        ("global", "Global"),
+    )
     name = models.CharField(max_length=120)
-    scope = models.CharField(max_length=50, default="device")
+    name_en = models.CharField(max_length=120, blank=True)
+    scope = models.CharField(max_length=50, choices=SCOPE_CHOICES, default="single")
     device = models.ForeignKey(Device, null=True, blank=True, on_delete=models.SET_NULL)
     device_group = models.ForeignKey(DeviceGroup, null=True, blank=True, on_delete=models.SET_NULL)
     payload = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey("authentication.User", null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
     restored_at = models.DateTimeField(null=True, blank=True)
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name

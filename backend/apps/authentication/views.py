@@ -511,8 +511,10 @@ class UserViewSet(viewsets.ModelViewSet):
             Notification.objects.create(
                 recipient=user,
                 channel="email",
-                title="HR Companion invitation",
-                body="You have been invited to HR Companion.",
+                title="دعوة إلى رفيق الموارد البشرية",
+                title_en="HR Companion invitation",
+                body="تمت دعوتك إلى نظام رفيق الموارد البشرية.",
+                body_en="You have been invited to HR Companion.",
                 status="sent",
             )
             invited += 1
@@ -539,15 +541,21 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
 class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.all()
+    queryset = Role.objects.order_by("id")
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, RolePermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "name_en", "description", "description_en"]
+    ordering_fields = ["name", "name_en"]
 
 
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Permission.objects.all()
+    queryset = Permission.objects.order_by("id")
     serializer_class = PermissionSerializer
     permission_classes = [IsAuthenticated, RolePermission]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["code", "name", "name_en", "description", "description_en"]
+    ordering_fields = ["code", "name", "name_en"]
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):

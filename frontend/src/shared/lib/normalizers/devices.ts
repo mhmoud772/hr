@@ -138,10 +138,14 @@ export function normalizeDeviceBackupSnapshot(
   raw: ApiDeviceBackupSnapshot | DeviceBackupSnapshot | Record<string, unknown>,
 ): DeviceBackupSnapshot {
   const record = asRecord(raw);
+  const rawScope = toOptionalString(record.scope);
   return {
     id: toRequiredString(record.id),
     name: toRequiredString(record.name),
-    scope: (toOptionalString(record.scope) as DeviceBackupSnapshot["scope"]) ?? "single",
+    scope:
+      rawScope === "device"
+        ? "single"
+        : (rawScope as DeviceBackupSnapshot["scope"]) ?? "single",
     deviceId: toOptionalId(record.deviceId) ?? null,
     deviceGroupId: toOptionalId(record.deviceGroupId) ?? null,
     payload: toOptionalRecord(record.payload),

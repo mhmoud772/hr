@@ -79,7 +79,19 @@ class Permission(models.Model):
     id = models.BigAutoField(primary_key=True)
     code = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=150)
+    name_en = models.CharField(max_length=150, blank=True)
     description = models.TextField(blank=True)
+    description_en = models.TextField(blank=True)
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_description(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.description_en:
+            return self.description_en
+        return self.description
 
     def __str__(self):
         return self.code
@@ -88,8 +100,20 @@ class Permission(models.Model):
 class Role(models.Model):
     id = models.BigAutoField(primary_key=True)
     name = models.CharField(max_length=100, unique=True)
+    name_en = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
+    description_en = models.TextField(blank=True)
     permissions = models.ManyToManyField(Permission, related_name="roles", blank=True)
+
+    def get_localized_name(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.name_en:
+            return self.name_en
+        return self.name
+
+    def get_localized_description(self, language: str | None = None) -> str:
+        if (language or "").lower().startswith("en") and self.description_en:
+            return self.description_en
+        return self.description
 
     def __str__(self):
         return self.name

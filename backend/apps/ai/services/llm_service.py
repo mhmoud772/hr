@@ -41,13 +41,15 @@ class LLMService:
 
     @staticmethod
     def _extract_policy_excerpt(policy, prompt: str) -> str:
+        language = "ar" if ContextBuilder.is_arabic_text(prompt) else "en"
+        content = policy.get_localized_content(language)
         sentences = [
             sentence.strip()
-            for sentence in __import__("re").split(r"(?<=[\.\!\?؟])\s+", policy.content)
+            for sentence in __import__("re").split(r"(?<=[\.\!\?؟])\s+", content)
             if sentence.strip()
         ]
         if not sentences:
-            return policy.content[:320].rstrip()
+            return content[:320].rstrip()
 
         words = ContextBuilder._expand_query_terms(prompt, ContextBuilder._tokenize_query(prompt))
         if not words:
@@ -67,26 +69,28 @@ class LLMService:
             return None
 
         is_arabic = ContextBuilder.is_arabic_text(prompt)
+        language = "ar" if is_arabic else "en"
         lead_policy = policies[0]
+        lead_policy_title = lead_policy.get_localized_title(language)
         lead_excerpt = cls._extract_policy_excerpt(lead_policy, prompt)
 
         if is_arabic:
             answer_lines = [
                 "بحسب سياسة الموارد البشرية الحالية:",
-                f"{lead_policy.title}: {lead_excerpt}",
+                f"{lead_policy_title}: {lead_excerpt}",
             ]
             if len(policies) > 1:
                 answer_lines.append("سياسات ذات صلة:")
-                answer_lines.extend(f"- {policy.title}" for policy in policies[1:])
+                answer_lines.extend(f"- {policy.get_localized_title(language)}" for policy in policies[1:])
             answer_lines.append("إذا رغبت، أستطيع تلخيص خطوات التقديم أو الموافقة أيضًا.")
         else:
             answer_lines = [
                 "Based on the current HR policy library:",
-                f"{lead_policy.title}: {lead_excerpt}",
+                f"{lead_policy_title}: {lead_excerpt}",
             ]
             if len(policies) > 1:
                 answer_lines.append("Related policies:")
-                answer_lines.extend(f"- {policy.title}" for policy in policies[1:])
+                answer_lines.extend(f"- {policy.get_localized_title(language)}" for policy in policies[1:])
             answer_lines.append("If needed, I can also summarize the approval flow or required lead time.")
 
         return {
@@ -94,13 +98,14 @@ class LLMService:
             "metadata": {
                 "grounded": True,
                 "source": "policy_documents",
-                "matched_policies": [policy.title for policy in policies],
+                "matched_policies": [policy.get_localized_title(language) for policy in policies],
             },
         }
 
     @staticmethod
     def _build_policy_fallback_answer(prompt: str) -> Dict[str, Any]:
         is_arabic = ContextBuilder.is_arabic_text(prompt)
+        language = "ar" if is_arabic else "en"
         policies = ContextBuilder.get_relevant_policy_documents(prompt, limit=3)
         if not policies:
             answer = (
@@ -120,20 +125,22 @@ class LLMService:
             }
 
         lead_policy = policies[0]
+        lead_policy_title = lead_policy.get_localized_title(language)
+        lead_policy_content = lead_policy.get_localized_content(language)
         if is_arabic:
             summary_lines = [
                 "بالاستناد إلى مكتبة سياسات الموارد البشرية الحالية:",
-                f'{lead_policy.title}: {lead_policy.content[:260].rstrip()}',
+                f'{lead_policy_title}: {lead_policy_content[:260].rstrip()}',
             ]
         else:
             summary_lines = [
                 "Based on the current HR policy library:",
-                f"{lead_policy.title}: {lead_policy.content[:260].rstrip()}",
+                f"{lead_policy_title}: {lead_policy_content[:260].rstrip()}",
             ]
 
         if len(policies) > 1:
             summary_lines.append("سياسات ذات صلة:" if is_arabic else "Related policies:")
-            summary_lines.extend(f"- {policy.title}" for policy in policies[1:])
+            summary_lines.extend(f"- {policy.get_localized_title(language)}" for policy in policies[1:])
 
         summary_lines.append(
             "إذا رغبت، اسأل سؤالًا أكثر تحديدًا للحصول على إجابة أدق."
@@ -145,14 +152,15 @@ class LLMService:
             "metadata": {
                 "mock": True,
                 "source": "policy_documents",
-                "matched_policies": [policy.title for policy in policies],
+                "matched_policies": [policy.get_localized_title(language) for policy in policies],
             },
         }
 
     @staticmethod
     def _build_dashboard_fallback_answer(prompt: str = "") -> Dict[str, Any]:
-        stats = AnalyticalService.get_dashboard_stats()
         is_arabic = ContextBuilder.is_arabic_text(prompt)
+        language = "ar" if is_arabic else "en"
+        stats = AnalyticalService.get_dashboard_stats(language=language)
         if is_arabic:
             answer = (
                 "ملخص النظام الحالي: "

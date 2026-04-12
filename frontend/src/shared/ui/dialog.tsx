@@ -1,6 +1,7 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/shared/lib/utils";
 
@@ -62,6 +63,7 @@ const DialogContent = React.forwardRef<
     },
     ref,
   ) => {
+  const { t } = useTranslation();
   const hasTitle = hasChildWithDisplayName(children, DialogPrimitive.Title.displayName);
   const hasDescription = hasChildWithDisplayName(children, DialogPrimitive.Description.displayName);
 
@@ -90,7 +92,7 @@ const DialogContent = React.forwardRef<
         {!hideCloseButton ? (
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent/70 data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t("close")}</span>
           </DialogPrimitive.Close>
         ) : null}
       </DialogPrimitive.Content>

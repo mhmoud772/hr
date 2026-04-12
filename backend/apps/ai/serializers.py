@@ -2,6 +2,24 @@ from rest_framework import serializers
 from apps.ai.models import PolicyDocument, AIInteraction
 
 class PolicyDocumentSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    content = serializers.SerializerMethodField()
+
+    def _resolve_language(self) -> str:
+        explicit_language = self.context.get("language")
+        if explicit_language:
+            return explicit_language
+
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        return "en" if accept_language.lower().startswith("en") else "ar"
+
+    def get_title(self, obj: PolicyDocument) -> str:
+        return obj.get_localized_title(self._resolve_language())
+
+    def get_content(self, obj: PolicyDocument) -> str:
+        return obj.get_localized_content(self._resolve_language())
+
     class Meta:
         model = PolicyDocument
         fields = [

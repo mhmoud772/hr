@@ -11,6 +11,11 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = "__all__"
 
+    def _resolve_language(self) -> str:
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        return "en" if accept_language.lower().startswith("en") else "ar"
+
     @extend_schema_field(serializers.BooleanField())
     def get_read(self, obj):
         request = self.context.get("request")
@@ -18,6 +23,14 @@ class NotificationSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return False
         return obj.reads.filter(user=user).exists()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["title"] = instance.get_localized_title(language)
+        data["body"] = instance.get_localized_body(language)
+        data["description"] = instance.get_localized_body(language)
+        return data
 
 
 class NotificationReadSerializer(serializers.ModelSerializer):

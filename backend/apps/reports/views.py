@@ -37,12 +37,13 @@ class AttendanceTrendView(APIView):
     def get(self, request):
         days = int(request.query_params.get("days", 30))
         trends = AnalyticalService.get_attendance_trends(days=days)
+        is_english = request.headers.get("Accept-Language", "").lower().startswith("en")
         return Response(
             {
                 "labels": [t["date"] for t in trends],
                 "datasets": [
                     {
-                        "label": "Attendance Rate (%)",
+                        "label": "Attendance Rate (%)" if is_english else "معدل الالتزام (%)",
                         "data": [t["rate"] for t in trends],
                     }
                 ],
@@ -75,7 +76,7 @@ class DashboardSummaryView(APIView):
     def get(self, request):
         range_param = request.query_params.get("range", "week")
         days = 30 if range_param == "month" else (1 if range_param == "today" else 7)
-        data = AnalyticalService.get_dashboard_stats(days_range=days)
+        data = AnalyticalService.get_dashboard_stats(days_range=days, language=request.headers.get("Accept-Language"))
         return Response(data)
 
 
@@ -87,6 +88,7 @@ class DashboardPulseView(APIView):
     def get(self, request):
         now = timezone.now()
         today = now.date()
+        language = request.headers.get("Accept-Language")
 
         currently_checked_in = Attendance.objects.filter(
             date=today,
@@ -101,7 +103,7 @@ class DashboardPulseView(APIView):
         logs_data = [
             {
                 "employee_code": log.employee_code,
-                "device": log.device.name,
+                "device": log.device.get_localized_name(language),
                 "timestamp": log.timestamp.isoformat(),
                 "action": log.action,
             }

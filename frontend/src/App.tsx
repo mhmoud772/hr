@@ -12,11 +12,13 @@ import { AuthProvider } from "@/features/auth/components/AuthProvider";
 import { LoadingState } from "@/shared/components/LoadingState";
 import { useTranslation } from "react-i18next";
 import { getSetupStatus } from "@/features/auth/api/auth";
+import { getAuthToken, getRefreshToken } from "@/shared/lib/api-client";
 import * as Sentry from "@sentry/react";
 import { dashboardLoader, attendanceLoader, leavesLoader } from "@/shared/lib/route-loaders";
 
 const Dashboard = lazy(() => import("@/features/dashboard/pages/Dashboard"));
 const Employees = lazy(() => import("@/features/employees/pages/Employees"));
+const AddEmployee = lazy(() => import("@/features/employees/pages/AddEmployee"));
 const Attendance = lazy(() => import("@/features/attendance/pages/Attendance"));
 const Shifts = lazy(() => import("@/features/attendance/pages/Shifts"));
 const Leaves = lazy(() => import("@/features/leaves/pages/Leaves"));
@@ -95,7 +97,8 @@ const GlobalGuard = () => {
       })
       .catch(() => {
         if (!active) return;
-        setSetupState("ready");
+        const hasStoredSession = Boolean(getAuthToken() || getRefreshToken());
+        setSetupState(hasStoredSession ? "ready" : "required");
       });
     return () => {
       active = false;
@@ -166,6 +169,7 @@ const router = createBrowserRouter([
         children: [
           { path: "/", loader: dashboardLoader(queryClient), element: <LazyRoute element={Dashboard} /> },
           { path: "/employees", element: <LazyRoute element={Employees} /> },
+          { path: "/employees/add", element: <LazyRoute element={AddEmployee} /> },
           { path: "/attendance", loader: attendanceLoader(queryClient), element: <LazyRoute element={Attendance} /> },
           { path: "/shifts", element: <LazyRoute element={Shifts} /> },
           { path: "/leaves", loader: leavesLoader(queryClient), element: <LazyRoute element={Leaves} /> },

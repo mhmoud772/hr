@@ -1,4 +1,4 @@
-import axios, { AxiosError } from "axios";
+import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from "axios";
 import { normalizeStringsDeep } from "./text-normalize";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -94,6 +94,27 @@ export const publicApiClient = axios.create({
 
 let refreshInFlight: Promise<string | null> | null = null;
 
+function resolvePreferredLanguage(): "ar" | "en" {
+  if (typeof window === "undefined") return "en";
+
+  const storedLanguage = window.localStorage?.getItem("i18nextLng");
+  const documentLanguage = document.documentElement.lang;
+  const navigatorLanguage = window.navigator.language;
+  const candidate = (storedLanguage || documentLanguage || navigatorLanguage || "en").toLowerCase();
+
+  return candidate.startsWith("ar") ? "ar" : "en";
+}
+
+function setHeader(
+  config: InternalAxiosRequestConfig,
+  headerName: string,
+  value: string,
+) {
+  const headers = AxiosHeaders.from(config.headers);
+  headers.set(headerName, value);
+  config.headers = headers;
+}
+
 function clearAuthState() {
   sessionStorage.setItem("authExpired", "1");
   setAuthToken(null);
@@ -143,10 +164,16 @@ async function refreshAccessToken() {
 }
 
 apiClient.interceptors.request.use((config) => {
+  setHeader(config, "Accept-Language", resolvePreferredLanguage());
   const token = getAuthToken();
-  if (token && config.headers) {
-    config.headers.set("Authorization", `Bearer ${token}`);
+  if (token) {
+    setHeader(config, "Authorization", `Bearer ${token}`);
   }
+  return config;
+});
+
+publicApiClient.interceptors.request.use((config) => {
+  setHeader(config, "Accept-Language", resolvePreferredLanguage());
   return config;
 });
 

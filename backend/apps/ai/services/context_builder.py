@@ -28,6 +28,10 @@ class ContextBuilder:
         return bool(value and cls.ARABIC_PATTERN.search(value))
 
     @staticmethod
+    def normalize_language(language: str | None) -> str:
+        return "en" if (language or "").lower().startswith("en") else "ar"
+
+    @staticmethod
     def _tokenize_query(query: str) -> list[str]:
         return [word for word in re.findall(r"\w+", query.lower()) if len(word) > 2]
 
@@ -45,22 +49,22 @@ class ContextBuilder:
     @classmethod
     def _score_policy_document(cls, policy: PolicyDocument, query: str, words: list[str]) -> int:
         normalized_query = query.lower().strip()
-        title = policy.title.lower()
-        content = policy.content.lower()
+        titles = [value.lower() for value in [policy.title, policy.title_en] if value]
+        contents = [value.lower() for value in [policy.content, policy.content_en] if value]
         category = policy.category.lower()
 
         score = 0
-        if normalized_query and normalized_query in title:
+        if normalized_query and any(normalized_query in title for title in titles):
             score += 12
-        if normalized_query and normalized_query in content:
+        if normalized_query and any(normalized_query in content for content in contents):
             score += 6
 
         for word in words:
-            if word in title:
+            if any(word in title for title in titles):
                 score += 4
             if word in category:
                 score += 2
-            if word in content:
+            if any(word in content for content in contents):
                 score += 1
 
         return score
@@ -75,7 +79,9 @@ class ContextBuilder:
         for word in words:
             q_objects |= (
                 Q(content__icontains=word)
+                | Q(content_en__icontains=word)
                 | Q(title__icontains=word)
+                | Q(title_en__icontains=word)
                 | Q(category__icontains=word)
             )
 
@@ -90,30 +96,31 @@ class ContextBuilder:
     @classmethod
     def get_relevant_policies(cls, query: str, limit: int = 3) -> str:
         policies = cls.get_relevant_policy_documents(query, limit=limit)
-        is_arabic = cls.is_arabic_text(query)
+        language = "ar" if cls.is_arabic_text(query) else "en"
+        is_arabic = language == "ar"
 
         if is_arabic:
             context = "### \u0627\u0644\u0633\u064a\u0627\u0633\u0627\u062a \u0630\u0627\u062a \u0627\u0644\u0635\u0644\u0629:\n"
             for policy in policies:
                 context += (
-                    f"- **{policy.title}** "
+                    f"- **{policy.get_localized_title(language)}** "
                     f"(\u0627\u0644\u0641\u0626\u0629: {policy.category}): "
-                    f"{policy.content[:500]}...\n"
+                    f"{policy.get_localized_content(language)[:500]}...\n"
                 )
             return context
 
         context = "### Relevant HR Policies:\n"
         for policy in policies:
             context += (
-                f"- **{policy.title}** "
+                f"- **{policy.get_localized_title(language)}** "
                 f"(Category: {policy.category}): "
-                f"{policy.content[:500]}...\n"
+                f"{policy.get_localized_content(language)[:500]}...\n"
             )
         return context
 
     @staticmethod
     def get_system_snapshot_context(language: str = "en") -> str:
-        stats = AnalyticalService.get_dashboard_stats()
+        stats = AnalyticalService.get_dashboard_stats(language=language)
         department_stats = stats.get("departmentStats", [])
         is_arabic = language == "ar"
 

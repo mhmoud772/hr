@@ -20,13 +20,23 @@ class NotificationService:
         return NotificationService.visible_to_user(user).exclude(reads__user=user)
 
     @staticmethod
-    def send_notification(recipient, title, body, channel="app", status=None):
+    def send_notification(
+        recipient,
+        title,
+        body,
+        channel="app",
+        status=None,
+        title_en=None,
+        body_en=None,
+    ):
         channel_value = str(channel or "app").strip().lower() or "app"
         status_value = status or ("queued" if channel_value in {"email", "sms"} else "sent")
         notification = Notification.objects.create(
             recipient=recipient,
             title=title,
+            title_en=title_en or "",
             body=body,
+            body_en=body_en or "",
             channel=channel_value,
             status=status_value,
         )

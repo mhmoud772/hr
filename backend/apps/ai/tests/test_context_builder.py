@@ -54,8 +54,10 @@ class ContextBuilderTests(TestCase):
     def test_get_relevant_policy_documents_supports_english_query_against_arabic_policy(self):
         PolicyDocument.objects.create(
             title="\u0633\u064a\u0627\u0633\u0629 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629",
+            title_en="Annual Leave Policy",
             category="leaves",
             content="\u064a\u0633\u062a\u062d\u0642 \u0627\u0644\u0645\u0648\u0638\u0641 \u0628\u062f\u0648\u0627\u0645 \u0643\u0627\u0645\u0644 21 \u064a\u0648\u0645\u064b\u0627 \u0645\u0646 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0629.",
+            content_en="All full-time employees are entitled to 21 days of paid annual leave per year.",
             is_active=True,
         )
 
@@ -63,3 +65,20 @@ class ContextBuilderTests(TestCase):
 
         self.assertGreaterEqual(len(policies), 1)
         self.assertEqual(policies[0].title, "\u0633\u064a\u0627\u0633\u0629 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629")
+
+    def test_get_relevant_policies_returns_english_translation_when_query_is_english(self):
+        PolicyDocument.objects.all().delete()
+        PolicyDocument.objects.create(
+            title="\u0633\u064a\u0627\u0633\u0629 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629",
+            title_en="Annual Leave Policy",
+            category="leaves",
+            content="\u064a\u0633\u062a\u062d\u0642 \u0627\u0644\u0645\u0648\u0638\u0641 \u0628\u062f\u0648\u0627\u0645 \u0643\u0627\u0645\u0644 21 \u064a\u0648\u0645\u064b\u0627 \u0645\u0646 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629 \u0627\u0644\u0645\u062f\u0641\u0648\u0639\u0629.",
+            content_en="All full-time employees are entitled to 21 days of paid annual leave per year.",
+            is_active=True,
+        )
+
+        context = ContextBuilder.get_relevant_policies("What is the annual leave policy?")
+
+        self.assertIn("Relevant HR Policies", context)
+        self.assertIn("Annual Leave Policy", context)
+        self.assertNotIn("سياسة الإجازة السنوية", context)

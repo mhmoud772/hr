@@ -125,7 +125,7 @@ export default function Dashboard() {
       tone: "primary" as const,
     },
     {
-      label: t("total_employees"),
+      label: t("current_workforce"),
       value: totalEmployees,
       icon: Users,
       tone: "primary" as const,
@@ -177,7 +177,7 @@ export default function Dashboard() {
   const cards = [
     {
       id: "total_employees",
-      title: t("total_employees"),
+      title: t("current_workforce"),
       value: totalEmployees,
       icon: Users,
       variant: "primary" as const,

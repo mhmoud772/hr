@@ -81,7 +81,9 @@ def send_bulk_notifications(self, payloads: list[dict]):
 
         channel = str(item.get("channel") or "app").strip().lower()
         title = str(item.get("title") or "Notification").strip()[:255] or "Notification"
+        title_en = str(item.get("title_en") or item.get("titleEn") or "").strip()[:255]
         body = str(item.get("body") or "").strip()
+        body_en = str(item.get("body_en") or item.get("bodyEn") or "").strip()
         recipient_id = item.get("recipientId") or item.get("recipient_id")
         recipient = User.objects.filter(id=recipient_id).first() if recipient_id else None
         status_value = "failed"
@@ -93,7 +95,9 @@ def send_bulk_notifications(self, payloads: list[dict]):
                     recipient=recipient,
                     channel="app",
                     title=title,
+                    title_en=title_en,
                     body=body,
+                    body_en=body_en,
                     status="sent",
                 )
                 status_value = "sent"
@@ -116,7 +120,9 @@ def send_bulk_notifications(self, payloads: list[dict]):
                     recipient=recipient,
                     channel="email",
                     title=title,
+                    title_en=title_en,
                     body=body,
+                    body_en=body_en,
                     status=status_value if status_value == "sent" else "failed",
                 )
             elif channel == "sms":
@@ -147,7 +153,9 @@ def send_bulk_notifications(self, payloads: list[dict]):
                     recipient=recipient,
                     channel="sms",
                     title=title,
+                    title_en=title_en,
                     body=body,
+                    body_en=body_en,
                     status=status_value if status_value == "sent" else "failed",
                 )
             elif channel == "push":

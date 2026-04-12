@@ -82,9 +82,11 @@ class AIViewsTests(APITestCase):
     def test_policies_view_returns_only_active_policies(self):
         self.client.force_authenticate(user=self.user)
         active_policy = PolicyDocument.objects.create(
-            title="Annual Leave Policy",
+            title="سياسة الإجازة السنوية",
+            title_en="Annual Leave Policy",
             category="leaves",
-            content="Employees receive annual leave according to policy.",
+            content="يستحق الموظفون إجازة سنوية وفقًا للسياسة.",
+            content_en="Employees receive annual leave according to policy.",
             is_active=True,
         )
         PolicyDocument.objects.create(
@@ -99,7 +101,24 @@ class AIViewsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(str(response.data[0]["id"]), str(active_policy.id))
+        self.assertEqual(response.data[0]["title"], "سياسة الإجازة السنوية")
+
+    def test_policies_view_returns_localized_english_policy_fields(self):
+        self.client.force_authenticate(user=self.user)
+        PolicyDocument.objects.create(
+            title="سياسة الإجازة السنوية",
+            title_en="Annual Leave Policy",
+            category="leaves",
+            content="يستحق الموظفون إجازة سنوية وفقًا للسياسة.",
+            content_en="Employees receive annual leave according to policy.",
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("ai_policies"), HTTP_ACCEPT_LANGUAGE="en")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data[0]["title"], "Annual Leave Policy")
+        self.assertEqual(response.data[0]["content"], "Employees receive annual leave according to policy.")
 
     def test_query_view_returns_403_when_ai_is_disabled_in_settings(self):
         self.client.force_authenticate(user=self.user)

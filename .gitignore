@@ -69,9 +69,15 @@ backend/*trace*.txt
 backend/debug_output.txt
 backend/error.txt
 backend/err.txt
-backend/pytest*.txt
-backend/temp_out.txt
-backend/tmp/
+# Local diagnostics and transient scripts
+*.txt
+*.ps1
+debug_*.py
+tmp/
+*.old
+*.bak
+.pytest_cache/
+__pycache__/
 
 # Native SDK / machine-local binaries
 backend/*.dll

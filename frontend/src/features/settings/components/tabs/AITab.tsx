@@ -48,6 +48,7 @@ export function AITab(props: any) {
                   <p className="text-sm text-muted-foreground">{t("ai_feature_enabled_desc")}</p>
                 </div>
                 <Switch
+                  data-testid="ai-enabled-switch"
                   className="self-start sm:self-center"
                   checked={featureEnabled}
                   onCheckedChange={(checked) =>

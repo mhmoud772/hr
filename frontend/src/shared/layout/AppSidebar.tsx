@@ -49,11 +49,11 @@ export function AppSidebar() {
       side={isRtl ? "right" : "left"}
       collapsible="icon"
     >
-      <SidebarHeader className="border-b border-sidebar-border/80 bg-gradient-to-b from-sidebar-primary/12 via-sidebar-background to-sidebar-background p-4">
-        <div className="flex items-center gap-3">
+      <SidebarHeader className={`border-b border-sidebar-border/80 bg-gradient-to-b from-sidebar-primary/12 via-sidebar-background to-sidebar-background ${collapsed ? "items-center p-1.5" : "p-4"}`}>
+        <div className={`flex items-center ${collapsed ? "justify-center gap-0" : "gap-3"}`}>
           <div className="relative group/logo">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 ring-4 ring-primary/10 flex items-center justify-center shadow-lg overflow-hidden transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-3">
-              <img src="/logo.svg" alt={t("app_name")} className="w-6 h-6 invert brightness-0" />
+            <div className={`${collapsed ? "h-8 w-8 rounded-lg ring-2" : "h-10 w-10 rounded-xl ring-4"} bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg overflow-hidden transition-all duration-500 group-hover/logo:scale-110 group-hover/logo:rotate-3 ring-primary/10`}>
+              <img src="/logo.svg" alt={t("app_name")} className={`${collapsed ? "h-5 w-5" : "h-6 w-6"} invert brightness-0`} />
             </div>
             {isOnline && (
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-background ring-2 ring-background">
@@ -63,14 +63,14 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-500">
-              <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/60 tracking-tight leading-none">
+              <span className="font-black text-lg tracking-tight leading-none text-sidebar-foreground drop-shadow-[0_1px_0_hsl(var(--sidebar-background)/0.35)]">
                 {t("app_name")}
               </span>
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[10px] text-primary font-bold uppercase tracking-widest bg-primary/10 px-1.5 py-0.5 rounded">
                   {t("badge_pro")}
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/65">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/85">
                   {t("app_subtitle")}
                 </span>
               </div>
@@ -79,12 +79,12 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-4 gap-6 scrollbar-none">
+      <SidebarContent className={`${collapsed ? "px-1.5 py-3" : "px-3 py-4"} gap-6 scrollbar-none`}>
         <div className="px-1 space-y-4">
           <Button
             variant="outline"
             onClick={() => setCommandOpen(true)}
-            className={`group/search relative h-10 w-full justify-start gap-3 overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/80 text-sidebar-foreground/90 shadow-sm transition-all duration-300 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "justify-center px-0" : ""}`}
+            className={`group/search relative w-full overflow-hidden border border-sidebar-border/80 bg-sidebar-accent/80 text-sidebar-foreground/90 shadow-sm transition-all duration-300 hover:bg-sidebar-accent hover:text-sidebar-foreground ${collapsed ? "h-8 justify-center rounded-lg px-0" : "h-10 justify-start gap-3 rounded-xl"}`}
           >
             <Search className="w-4 h-4 shrink-0 transition-colors group-hover/search:text-primary" />
             {!collapsed && (
@@ -185,16 +185,16 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border/80 bg-sidebar/90 p-3 backdrop-blur-md">
+      <SidebarFooter className={`border-t border-sidebar-border/80 bg-sidebar/90 backdrop-blur-md ${collapsed ? "p-1.5" : "p-3"}`}>
         <Popover>
           <PopoverTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="group/user w-full rounded-xl text-sidebar-foreground transition-all duration-300 hover:bg-sidebar-accent/90 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground"
+              className={`group/user rounded-xl text-sidebar-foreground transition-all duration-300 hover:bg-sidebar-accent/90 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground ${collapsed ? "justify-center px-0" : "w-full"}`}
             >
-              <div className="flex items-center gap-3 w-full">
+              <div className={`flex items-center w-full ${collapsed ? "justify-center gap-0" : "gap-3"}`}>
                 <div className="relative">
-                  <Avatar className="h-9 w-9 border-2 border-primary/20 group-hover/user:border-primary/40 transition-colors">
+                  <Avatar className={`${collapsed ? "h-8 w-8" : "h-9 w-9"} border-2 border-primary/20 group-hover/user:border-primary/40 transition-colors`}>
                     <AvatarImage src={user?.avatar} alt={user?.name} />
                     <AvatarFallback className="bg-primary/10 text-primary font-bold">
                       {user?.name?.[0]?.toUpperCase() || "U"}

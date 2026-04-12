@@ -57,6 +57,7 @@ export default function Employees() {
     confirmDelete,
     handleExportCSV,
     handleImportCSV,
+    isSaving,
     actionLoading,
   } = useEmployeeActions(() => employeesQuery.refetch());
 
@@ -321,6 +322,7 @@ export default function Employees() {
         onOpenChange={setFormOpen}
         employee={selectedEmployee}
         onSave={(data, avatar) => handleSave(selectedEmployee, data, avatar)}
+        isLoading={isSaving}
       />
 
       <DeleteConfirmDialog

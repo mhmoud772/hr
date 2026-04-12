@@ -1,4 +1,5 @@
 import logging
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
@@ -56,7 +57,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status', 'department', 'job_title']
-    search_fields = ['name', 'employee_code', 'email']
+    search_fields = ['name', 'employee_code', 'email', 'department__name', 'department__name_en', 'job_title__name', 'job_title__name_en']
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -150,7 +151,7 @@ class JobTitleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["level", "department"]
-    search_fields = ["name", "name_en", "description", "department__name"]
+    search_fields = ["name", "name_en", "description", "department__name", "department__name_en"]
     ordering_fields = ["name", "level", "employee_count", "department__name"]
 
 class PayrollRecordViewSet(viewsets.ModelViewSet):
@@ -216,7 +217,7 @@ class RecruitmentCandidateViewSet(viewsets.ModelViewSet):
         if status_param:
             qs = qs.filter(status=status_param)
         if position:
-            qs = qs.filter(position__icontains=position)
+            qs = qs.filter(Q(position__icontains=position) | Q(position_en__icontains=position))
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
@@ -316,7 +317,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         if status_param:
             qs = qs.filter(status=status_param)
         if category:
-            qs = qs.filter(category__icontains=category)
+            qs = qs.filter(Q(category__icontains=category) | Q(category_en__icontains=category))
 
 class PayrollRecordViewSet(viewsets.ModelViewSet):
     queryset = PayrollRecord.objects.select_related("employee")
@@ -358,7 +359,7 @@ class RecruitmentCandidateViewSet(viewsets.ModelViewSet):
     serializer_class = RecruitmentCandidateSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filterset_fields = ["status", "position"]
-    search_fields = ["name", "email", "phone", "position"]
+    search_fields = ["name", "email", "phone", "position", "position_en", "source", "source_en", "notes", "notes_en"]
     ordering_fields = ["applied_at", "name"]
 
     def get_queryset(self):
@@ -381,7 +382,7 @@ class RecruitmentCandidateViewSet(viewsets.ModelViewSet):
         if status_param:
             qs = qs.filter(status=status_param)
         if position:
-            qs = qs.filter(position__icontains=position)
+            qs = qs.filter(Q(position__icontains=position) | Q(position_en__icontains=position))
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
@@ -390,7 +391,7 @@ class TrainingRecordViewSet(viewsets.ModelViewSet):
     serializer_class = TrainingRecordSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filterset_fields = ["employee__employee_code", "status"]
-    search_fields = ["employee__name", "title", "provider"]
+    search_fields = ["employee__name", "title", "title_en", "provider", "provider_en", "notes", "notes_en"]
     ordering_fields = ["start_date", "end_date"]
 
     def get_queryset(self):
@@ -425,7 +426,7 @@ class PerformanceReviewViewSet(viewsets.ModelViewSet):
     serializer_class = PerformanceReviewSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filterset_fields = ["employee__employee_code", "period"]
-    search_fields = ["employee__name", "period"]
+    search_fields = ["employee__name", "period", "notes", "notes_en"]
     ordering_fields = ["created_at", "period"]
 
     def get_queryset(self):
@@ -460,7 +461,7 @@ class AssetViewSet(viewsets.ModelViewSet):
     serializer_class = AssetSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filterset_fields = ["status", "category", "assigned_to__employee_code"]
-    search_fields = ["name", "serial_number", "category"]
+    search_fields = ["name", "name_en", "serial_number", "category", "category_en", "notes", "notes_en"]
     ordering_fields = ["name", "status"]
 
     def get_queryset(self):
@@ -481,7 +482,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         if status_param:
             qs = qs.filter(status=status_param)
         if category:
-            qs = qs.filter(category__icontains=category)
+            qs = qs.filter(Q(category__icontains=category) | Q(category_en__icontains=category))
         if employee_code:
             qs = qs.filter(assigned_to__employee_code=employee_code)
         serializer = self.get_serializer(qs, many=True)
@@ -515,6 +516,19 @@ class EmployeeDocumentViewSet(viewsets.ModelViewSet):
     queryset = EmployeeDocument.objects.all()
     serializer_class = EmployeeDocumentSerializer
     permission_classes = [permissions.IsAuthenticated, RolePermission]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["employee", "doc_type"]
+    search_fields = [
+        "title",
+        "title_en",
+        "doc_type",
+        "doc_type_en",
+        "notes",
+        "notes_en",
+        "employee__name",
+        "employee__employee_code",
+    ]
+    ordering_fields = ["uploaded_at", "title"]
 
     def get_queryset(self):
         qs = super().get_queryset()

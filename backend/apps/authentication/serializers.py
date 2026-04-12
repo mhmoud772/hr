@@ -14,9 +14,21 @@ User = get_user_model()
 
 
 class PermissionSerializer(serializers.ModelSerializer):
+    def _resolve_language(self) -> str:
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        return "en" if accept_language.lower().startswith("en") else "ar"
+
     class Meta:
         model = AppPermission
-        fields = ["id", "code", "name", "description"]
+        fields = ["id", "code", "name", "name_en", "description", "description_en"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        data["description"] = instance.get_localized_description(language)
+        return data
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -30,7 +42,12 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Role
-        fields = ["id", "name", "description", "permissions", "permission_ids"]
+        fields = ["id", "name", "name_en", "description", "description_en", "permissions", "permission_ids"]
+
+    def _resolve_language(self) -> str:
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        return "en" if accept_language.lower().startswith("en") else "ar"
 
     def create(self, validated_data):
         perms = validated_data.pop("permissions", [])
@@ -44,6 +61,13 @@ class RoleSerializer(serializers.ModelSerializer):
         if perms is not None:
             role.permissions.set(perms)
         return role
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        data["description"] = instance.get_localized_description(language)
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):

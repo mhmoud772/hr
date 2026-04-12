@@ -185,9 +185,13 @@ export function MainLayout({ children }: MainLayoutProps) {
       else if (p === "leaves") label = t("leaves");
       else if (p === "devices") label = t("devices");
       else if (p === "device-command-center") label = t("command_center");
+      else if (p === "job-titles") label = t("job_titles_title");
       else if (p === "settings") label = t("settings");
       else if (p === "payroll") label = t("payroll");
       else if (p === "recruitment") label = t("recruitment");
+      else if (p === "training") label = t("training");
+      else if (p === "shifts") label = t("shifts");
+      else if (p === "audit-logs") label = t("audit_logs_title");
       else if (p === "performance") label = t("performance");
       else if (p === "self-service") label = t("self_service_title");
       else if (p === "reports") label = t("reports");

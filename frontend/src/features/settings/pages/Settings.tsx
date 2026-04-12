@@ -88,6 +88,24 @@ export default function Settings() {
     });
     return next;
   };
+  const normalizeLanguage = useCallback(
+    (value?: string) => (value?.toLowerCase().startsWith("ar") ? "ar" : "en"),
+    [],
+  );
+  const applyPreferredLanguage = useCallback(
+    async (nextLanguage: string) => {
+      const normalizedLanguage = normalizeLanguage(nextLanguage);
+      try {
+        await i18n.changeLanguage(normalizedLanguage);
+        localStorage.setItem("i18nextLng", normalizedLanguage);
+        document.documentElement.dir = normalizedLanguage === "ar" ? "rtl" : "ltr";
+        document.documentElement.lang = normalizedLanguage;
+      } catch {
+        // Ignore runtime language-sync failures and keep the saved configuration.
+      }
+    },
+    [i18n, normalizeLanguage],
+  );
 
   const defaultCompany = useMemo(
     () => ({
@@ -168,7 +186,7 @@ export default function Settings() {
   const defaultGeneral = useMemo(
     () => ({
       theme: theme as string,
-      language: "ar",
+      language: normalizeLanguage(i18n.language),
       timezone: "Asia/Riyadh",
       time_format: "24" as const,
       week_start: "sun" as const,
@@ -196,7 +214,7 @@ export default function Settings() {
         passwordExpiryDays: 90,
       },
     }),
-    [theme],
+    [theme, i18n.language, normalizeLanguage],
   );
 
   const recommendedSecurityDefaults = useMemo(
@@ -251,12 +269,6 @@ export default function Settings() {
       setTheme(general.value.theme as string);
     }
   }, [general.value.theme, setTheme]);
-
-  useEffect(() => {
-    if (general.value.language && i18n.language !== general.value.language) {
-      i18n.changeLanguage(general.value.language).catch(() => {});
-    }
-  }, [general.value.language, i18n]);
 
   const mustChangePassword = Boolean(user?.must_change_password);
   const canSettings = canAdmin || permissions.has("settings");
@@ -455,6 +467,7 @@ export default function Settings() {
       }
       const ok = await general.save();
       if (ok) {
+        await applyPreferredLanguage(general.value.language);
         toast({ title: t("saved"), description: t("settings_saved_desc", { section: t("general_title") }) });
       }
       return;

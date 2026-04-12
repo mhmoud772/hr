@@ -85,6 +85,50 @@ class AuthTests(APITestCase):
         notifications_response = self.client.get("/api/notifications/")
         self.assertEqual(notifications_response.status_code, status.HTTP_200_OK)
 
+    def test_permissions_endpoint_returns_localized_english_fields(self):
+        AppPermission.objects.create(
+            code="employees.read",
+            name="عرض الموظفين",
+            name_en="View employees",
+            description="عرض بيانات الموظفين",
+            description_en="View employee records",
+        )
+        self.user.role = "system_admin"
+        self.user.save(update_fields=["role"])
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get("/api/permissions/", HTTP_ACCEPT_LANGUAGE="en")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data["results"][0] if isinstance(response.data, dict) else response.data[0]
+        self.assertEqual(item["name"], "View employees")
+        self.assertEqual(item["description"], "View employee records")
+
+    def test_roles_endpoint_returns_localized_english_fields(self):
+        permission = AppPermission.objects.create(
+            code="reports.read",
+            name="عرض التقارير",
+            name_en="View reports",
+        )
+        role = Role.objects.create(
+            name="مدير تقارير",
+            name_en="Reports Manager",
+            description="يدير الوصول إلى التقارير",
+            description_en="Manages report access",
+        )
+        role.permissions.add(permission)
+        self.user.role = "system_admin"
+        self.user.save(update_fields=["role"])
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get("/api/roles/", HTTP_ACCEPT_LANGUAGE="en")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        item = response.data["results"][0] if isinstance(response.data, dict) else response.data[0]
+        self.assertEqual(item["name"], "Reports Manager")
+        self.assertEqual(item["description"], "Manages report access")
+        self.assertEqual(item["permissions"][0]["name"], "View reports")
+
 
 class UserInviteTests(APITestCase):
     def setUp(self):

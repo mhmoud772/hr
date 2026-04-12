@@ -303,7 +303,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, RolePermission]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ["status", "connection_mode", "group"]
-    search_fields = ["name", "serial_number", "ip_address"]
+    search_fields = ["name", "name_en", "serial_number", "ip_address", "location", "location_en"]
     ordering_fields = ["name", "last_sync"]
 
     @extend_schema(
@@ -363,6 +363,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             command="sync",
             payload={"limit": None},
             reason="Manual sync requested",
+            request=request,
         )
         return Response(result["data"], status=result["status_code"])
 
@@ -384,6 +385,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             command="sync_time",
             payload={},
             reason="Manual time sync requested",
+            request=request,
         )
         return Response(result["data"], status=result["status_code"])
 
@@ -403,6 +405,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
             command="reboot",
             payload={},
             reason="Manual reboot requested",
+            request=request,
         )
         return Response(result["data"], status=result["status_code"])
 
@@ -447,6 +450,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 command=command,
                 payload={"limit": None} if command == "sync" else {},
                 reason="Bulk command requested",
+                request=request,
             )
             queued += 1 if result["ok"] else 0
             results.append({"deviceId": str(device.id), "queued": bool(result["ok"]), **result["data"]})

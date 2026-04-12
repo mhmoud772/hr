@@ -1,4 +1,5 @@
 from datetime import timedelta
+import re
 from django.utils import timezone
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
@@ -18,20 +19,121 @@ from .models import (
 from apps.employees.models import Employee
 
 
-class DeviceGroupSerializer(serializers.ModelSerializer):
+class LocalizedDeviceFieldsMixin:
+    def _resolve_language(self) -> str:
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        return "en" if accept_language.lower().startswith("en") else "ar"
+
+
+def _localize_device_log_message(message: str, language: str) -> str:
+    text = str(message or "")
+    if not text or not language.lower().startswith("ar"):
+        return text
+
+    exact_messages = {
+        "Sync completed": "اكتملت المزامنة بنجاح.",
+        "Device time synchronized.": "تمت مزامنة وقت الجهاز.",
+        "Device rebooted.": "تمت إعادة تشغيل الجهاز.",
+        "Device attendance logs cleared.": "تم مسح سجلات حضور الجهاز.",
+        "Task worker is not configured.": "عامل المهام غير مهيأ.",
+        "Attendance import request recorded.": "تم تسجيل طلب استيراد الحضور.",
+        "Template distributed.": "تم توزيع القالب.",
+        "SDK does not support template push.": "لا يدعم SDK إرسال القوالب.",
+    }
+    if text in exact_messages:
+        return exact_messages[text]
+
+    pattern_messages = [
+        (
+            r"^Synced (\d+) records, (\d+) new\.$",
+            lambda match: f"تمت مزامنة {match.group(1)} سجلًا، وأضيف {match.group(2)} جديدًا.",
+        ),
+        (
+            r"^Employee (.+) not found\.$",
+            lambda match: f"لم يتم العثور على الموظف {match.group(1)}.",
+        ),
+        (
+            r"^Employee (.+) pushed to device\.$",
+            lambda match: f"تم إرسال الموظف {match.group(1)} إلى الجهاز.",
+        ),
+        (
+            r"^Employee (.+) disabled on device\.$",
+            lambda match: f"تم تعطيل الموظف {match.group(1)} على الجهاز.",
+        ),
+        (
+            r"^Employee (.+) enabled on device\.$",
+            lambda match: f"تم تفعيل الموظف {match.group(1)} على الجهاز.",
+        ),
+        (
+            r"^Employee (.+) deleted from device\.$",
+            lambda match: f"تم حذف الموظف {match.group(1)} من الجهاز.",
+        ),
+        (
+            r"^Policy applied: (.+)$",
+            lambda match: f"تم تطبيق السياسة: {match.group(1)}",
+        ),
+        (
+            r"^Firmware rollout: (.+)$",
+            lambda match: f"تحديث البرنامج الثابت: {match.group(1)}",
+        ),
+        (
+            r"^Queued for ADMS delivery \((\d+) pending\)$",
+            lambda match: f"تمت إضافة الأمر إلى قائمة ADMS ({match.group(1)} قيد الانتظار).",
+        ),
+        (
+            r"^Failed to queue ADMS command: (.+)$",
+            lambda match: f"فشل في صف أمر ADMS: {match.group(1)}",
+        ),
+        (
+            r"^Failed to queue command: (.+)$",
+            lambda match: f"فشل في صف الأمر: {match.group(1)}",
+        ),
+        (
+            r"^Unable to reach device: (.+)$",
+            lambda match: f"تعذر الوصول إلى الجهاز: {match.group(1)}",
+        ),
+    ]
+    for pattern, formatter in pattern_messages:
+        match = re.match(pattern, text)
+        if match:
+            return formatter(match)
+    return text
+
+
+def _localize_template_distribution_message(message: str, language: str) -> str:
+    text = str(message or "")
+    if not text or not language.lower().startswith("ar"):
+        return text
+    exact_messages = {
+        "Template distributed.": "تم توزيع القالب.",
+        "SDK does not support template push.": "لا يدعم SDK إرسال القوالب.",
+    }
+    return exact_messages.get(text, text)
+
+
+class DeviceGroupSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     deviceCount = serializers.SerializerMethodField()
 
     class Meta:
         model = DeviceGroup
         fields = ["id", "name", "description", "deviceCount", "created_at", "updated_at"]
 
+    @extend_schema_field(serializers.IntegerField())
     def get_deviceCount(self, obj):
         if hasattr(obj, "device_total"):
             return int(obj.device_total or 0)
         return obj.devices.count()
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        data["description"] = instance.get_localized_description(language)
+        return data
 
-class DevicePolicySerializer(serializers.ModelSerializer):
+
+class DevicePolicySerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     deviceCount = serializers.SerializerMethodField()
 
     class Meta:
@@ -50,13 +152,21 @@ class DevicePolicySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(serializers.IntegerField())
     def get_deviceCount(self, obj):
         if hasattr(obj, "device_total"):
             return int(obj.device_total or 0)
         return obj.devices.count()
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        data["description"] = instance.get_localized_description(language)
+        return data
 
-class DeviceSerializer(serializers.ModelSerializer):
+
+class DeviceSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     serialNumber = serializers.CharField(source="serial_number")
     ipAddress = serializers.IPAddressField(source="ip_address")
@@ -100,6 +210,13 @@ class DeviceSerializer(serializers.ModelSerializer):
 
         return encrypt_comm_key(value)
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        data["location"] = instance.get_localized_location(language)
+        return data
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
         serial_number = str(attrs.get("serial_number") or "").strip()
@@ -112,10 +229,18 @@ class DeviceSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class DeviceSyncLogSerializer(serializers.ModelSerializer):
+class DeviceSyncLogSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = DeviceSyncLog
         fields = "__all__"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        if language == "en" and getattr(instance, "reason_en", ""):
+            data["reason"] = instance.reason_en
+        data["message"] = _localize_device_log_message(getattr(instance, "message", ""), language)
+        return data
 
 
 class DeviceUserMappingSerializer(serializers.ModelSerializer):
@@ -185,8 +310,18 @@ class BiometricTemplateDistributionSerializer(serializers.ModelSerializer):
         full = f"{obj.requested_by.first_name} {obj.requested_by.last_name}".strip()
         return full or obj.requested_by.username
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = "en"
+        request = self.context.get("request")
+        accept_language = request.headers.get("Accept-Language", "") if request else ""
+        if not accept_language.lower().startswith("en"):
+            language = "ar"
+        data["message"] = _localize_template_distribution_message(getattr(instance, "message", ""), language)
+        return data
 
-class DeviceCommandApprovalSerializer(serializers.ModelSerializer):
+
+class DeviceCommandApprovalSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     deviceIds = serializers.PrimaryKeyRelatedField(source="target_devices", queryset=Device.objects.all(), many=True)
     requestedByName = serializers.SerializerMethodField()
     approvedByName = serializers.SerializerMethodField()
@@ -243,6 +378,12 @@ class DeviceCommandApprovalSerializer(serializers.ModelSerializer):
         full = f"{obj.rejected_by.first_name} {obj.rejected_by.last_name}".strip()
         return full or obj.requested_by.username
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self._resolve_language() == "en" and getattr(instance, "reason_en", ""):
+            data["reason"] = instance.reason_en
+        return data
+
     def create(self, validated_data):
         devices = validated_data.pop("target_devices", [])
         requested_by = validated_data.pop("requested_by", None)
@@ -261,7 +402,7 @@ class DeviceCommandApprovalSerializer(serializers.ModelSerializer):
         return approval
 
 
-class DeviceFirmwareRolloutSerializer(serializers.ModelSerializer):
+class DeviceFirmwareRolloutSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     deviceGroupId = serializers.PrimaryKeyRelatedField(source="device_group", queryset=DeviceGroup.objects.all(), required=False, allow_null=True)
     requestedByName = serializers.SerializerMethodField()
 
@@ -283,6 +424,7 @@ class DeviceFirmwareRolloutSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["results", "status", "requested_by", "requestedByName", "created_at", "started_at", "finished_at"]
 
+    @extend_schema_field(serializers.CharField())
     def get_requestedByName(self, obj):
         if not obj.requested_by:
             return ""
@@ -296,17 +438,25 @@ class DeviceFirmwareRolloutSerializer(serializers.ModelSerializer):
             **validated_data,
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self._resolve_language() == "en" and getattr(instance, "notes_en", ""):
+            data["notes"] = instance.notes_en
+        return data
 
-class DeviceBackupSnapshotSerializer(serializers.ModelSerializer):
+
+class DeviceBackupSnapshotSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     deviceId = serializers.PrimaryKeyRelatedField(source="device", queryset=Device.objects.all(), required=False, allow_null=True)
     deviceGroupId = serializers.PrimaryKeyRelatedField(source="device_group", queryset=DeviceGroup.objects.all(), required=False, allow_null=True)
     createdByName = serializers.SerializerMethodField()
+    name_en = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = DeviceBackupSnapshot
         fields = [
             "id",
             "name",
+            "name_en",
             "scope",
             "deviceId",
             "deviceGroupId",
@@ -324,6 +474,14 @@ class DeviceBackupSnapshotSerializer(serializers.ModelSerializer):
             return ""
         full = f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
         return full or obj.created_by.username
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        language = self._resolve_language()
+        data["name"] = instance.get_localized_name(language)
+        if data.get("scope") == "device":
+            data["scope"] = "single"
+        return data
 
 
 class DeviceCommandResponseSerializer(serializers.Serializer):

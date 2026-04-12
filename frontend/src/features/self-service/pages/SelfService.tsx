@@ -45,7 +45,7 @@ import { useSelfServiceNotifications } from "../hooks/useSelfServiceNotification
 
 export default function SelfService() {
   const { t } = useTranslation();
-  const { isAIEnabled } = useAIStatus();
+  const { isAIEnabled, isLoading: isAIStatusLoading } = useAIStatus();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(
     searchParams.get("tab") || "profile"
@@ -137,10 +137,11 @@ export default function SelfService() {
 
   // Handle redirect if AI is disabled but selected
   useEffect(() => {
+    if (isAIStatusLoading) return;
     if (!isAIEnabled && activeTab === "ai-assistant") {
       handleTabChange("profile");
     }
-  }, [isAIEnabled, activeTab, handleTabChange]);
+  }, [isAIEnabled, isAIStatusLoading, activeTab, handleTabChange]);
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6 pb-10">

@@ -59,7 +59,7 @@ export function DeviceGridView({
             <div className="flex items-center gap-2">
               <StatusDot status={device.status} />
               <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
-                {device.model || "DEVICE"}
+                {device.model || t("device_badge", { defaultValue: "Device" })}
               </Badge>
             </div>
             <DropdownMenu>
@@ -111,7 +111,7 @@ export function DeviceGridView({
                   <p className="font-semibold">{device.employeeCount || 0}</p>
                 </div>
                 <div className="bg-muted px-2 py-1.5 rounded">
-                  <p className="text-muted-foreground mb-0.5">{t("logs")}</p>
+                  <p className="text-muted-foreground mb-0.5">{t("logs_label", { defaultValue: "Logs" })}</p>
                   <p className="font-semibold">{device.logCount || 0}</p>
                 </div>
               </div>

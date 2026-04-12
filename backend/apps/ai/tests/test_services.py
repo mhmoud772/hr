@@ -42,6 +42,15 @@ class LLMServiceTests(TestCase):
 
     @override_settings(AI_API_KEY=None)
     def test_ask_ai_returns_grounded_answer_for_arabic_policy_question(self):
+        PolicyDocument.objects.all().delete()
+        PolicyDocument.objects.create(
+            title="سياسة الإجازة السنوية",
+            title_en="Annual Leave Policy",
+            category="leaves",
+            content="يستحق جميع الموظفين بدوام كامل 21 يومًا من الإجازة السنوية المدفوعة في السنة.",
+            content_en="All full-time employees are entitled to 21 days of paid annual leave per year.",
+            is_active=True,
+        )
         response = LLMService.ask_ai(
             user=None,
             prompt="\u0645\u0627 \u0633\u064a\u0627\u0633\u0629 \u0627\u0644\u0625\u062c\u0627\u0632\u0629 \u0627\u0644\u0633\u0646\u0648\u064a\u0629\u061f",
@@ -49,7 +58,30 @@ class LLMServiceTests(TestCase):
         )
 
         self.assertIn("\u0628\u062d\u0633\u0628 \u0633\u064a\u0627\u0633\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629", response["answer"])
+        self.assertIn("سياسة الإجازة السنوية", response["answer"])
+        self.assertTrue(response["metadata"]["grounded"])
+
+    @override_settings(AI_API_KEY=None)
+    def test_ask_ai_returns_localized_english_answer_for_bilingual_policy(self):
+        PolicyDocument.objects.all().delete()
+        PolicyDocument.objects.create(
+            title="سياسة الإجازة السنوية",
+            title_en="Annual Leave Policy",
+            category="leaves",
+            content="يستحق جميع الموظفين بدوام كامل 21 يومًا من الإجازة السنوية المدفوعة في السنة.",
+            content_en="All full-time employees are entitled to 21 days of paid annual leave per year.",
+            is_active=True,
+        )
+
+        response = LLMService.ask_ai(
+            user=None,
+            prompt="What is the annual leave policy?",
+            system_context="ctx",
+        )
+
         self.assertIn("Annual Leave Policy", response["answer"])
+        self.assertIn("21 days", response["answer"])
+        self.assertNotIn("سياسة الإجازة السنوية", response["answer"])
         self.assertTrue(response["metadata"]["grounded"])
 
     @override_settings(AI_API_KEY="live-key")
