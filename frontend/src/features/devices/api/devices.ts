@@ -90,7 +90,9 @@ export type BulkDeviceCommandPayload = {
     | "clear_logs"
     | "apply_policy"
     | "distribute_template"
-    | "firmware_rollout";
+    | "firmware_rollout"
+    | "push_all_employees"
+    | "sync_all_devices";
   reason?: string;
   limit?: number;
   employeeCode?: string;
@@ -135,6 +137,7 @@ export type DeviceCommandCenterQueuePayload = {
   command: string;
   deviceIds?: string[];
   groupId?: string;
+  departmentId?: string;
   reason?: string;
   payload?: Record<string, unknown>;
 };

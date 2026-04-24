@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, CreditCard, ShieldAlert, FileText } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/ui/avatar";
@@ -74,6 +74,14 @@ export default function Employees() {
   const inactiveCount = employees.filter((employee) => employee.status === "inactive").length;
   const appliedFilters = [search.trim(), status !== "all" ? status : "", department !== "all" ? department : "", jobTitle !== "all" ? jobTitle : ""].filter(Boolean).length;
   const roleLabel = user?.role ? t(`role_${user.role}`) : t("default_user_role");
+  const selectedDepartmentLabel =
+    department === "all"
+      ? t("status_all")
+      : departmentOptions.find((option) => option.id === department)?.name || department;
+  const selectedJobTitleLabel =
+    jobTitle === "all"
+      ? t("status_all")
+      : jobTitleOptions.find((option) => option.id === jobTitle)?.name || jobTitle;
   const statusFilterLabel =
     status === "all"
       ? t("status_all")
@@ -81,7 +89,7 @@ export default function Employees() {
         ? t("status_on_leave")
         : t(`status_${status}`);
 
-  if (employeesQuery.isLoading || isFiltersLoading) {
+  if (employeesQuery.isLoading) {
     return <LoadingState label={t("loading")} />;
   }
 
@@ -186,10 +194,10 @@ export default function Employees() {
             {t("status")}: {statusFilterLabel}
           </Badge>
           <Badge variant="secondary" className="rounded-full bg-background/85 px-3 py-1.5 text-muted-foreground">
-            {t("department")}: {department === "all" ? t("status_all") : department}
+            {t("department")}: {selectedDepartmentLabel}
           </Badge>
           <Badge variant="secondary" className="rounded-full bg-background/85 px-3 py-1.5 text-muted-foreground">
-            {t("job_title")}: {jobTitle === "all" ? t("status_all") : jobTitle}
+            {t("job_title")}: {selectedJobTitleLabel}
           </Badge>
         </div>
       </PageHero>
@@ -222,7 +230,7 @@ export default function Employees() {
                   <SelectContent>
                     <SelectItem value="all">{t("status_all")}</SelectItem>
                     {departmentOptions.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>
+                      <SelectItem key={dept.id} value={dept.id}>
                         {dept.name}
                       </SelectItem>
                     ))}
@@ -235,7 +243,7 @@ export default function Employees() {
                   <SelectContent>
                     <SelectItem value="all">{t("status_all")}</SelectItem>
                     {jobTitleOptions.map((job) => (
-                      <SelectItem key={job.id} value={job.name}>
+                      <SelectItem key={job.id} value={job.id}>
                         {job.name}
                       </SelectItem>
                     ))}
@@ -354,6 +362,7 @@ export default function Employees() {
         }}
         details={[
           { label: t("employee_id"), value: selectedEmployee?.id || "" },
+          { label: t("employee_code"), value: selectedEmployee?.employeeCode || "-" },
           { label: t("email"), value: selectedEmployee?.email || "" },
           { label: t("phone"), value: selectedEmployee?.phone || "" },
           { label: t("department"), value: selectedEmployee?.department || "" },
@@ -365,7 +374,51 @@ export default function Employees() {
           { label: t("contract_status"), value: selectedEmployee?.contractStatus || "" },
         ]}
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t">
+            <div className="space-y-3">
+              <h4 className="font-semibold text-primary flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                {t("bank_info")}
+              </h4>
+              <div className="text-sm space-y-1">
+                <p><span className="text-muted-foreground">{t("bank_name")}:</span> {selectedEmployee?.bankName || "-"}</p>
+                <p><span className="text-muted-foreground">{t("bank_account")}:</span> {selectedEmployee?.bankAccount || "-"}</p>
+                <p className="font-mono text-xs"><span className="text-muted-foreground">{t("bank_iban")}:</span> {selectedEmployee?.bankIban || "-"}</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h4 className="font-semibold text-primary flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4" />
+                {t("emergency_info")}
+              </h4>
+              <div className="text-sm space-y-1">
+                <p><span className="text-muted-foreground">{t("emergency_name")}:</span> {selectedEmployee?.emergencyName || "-"}</p>
+                <p><span className="text-muted-foreground">{t("emergency_phone")}:</span> {selectedEmployee?.emergencyPhone || "-"}</p>
+                <p><span className="text-muted-foreground">{t("emergency_relation")}:</span> {selectedEmployee?.emergencyRelation || "-"}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-4 border-t">
+            <h4 className="font-semibold text-primary flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              {t("id_documents")}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              <div className="p-3 rounded-lg border bg-muted/5">
+                <p className="text-xs text-muted-foreground">{t("id_number")}</p>
+                <p className="font-medium">{selectedEmployee?.idNumber || "-"}</p>
+                <p className="text-[10px] text-muted-foreground">{t("expiry")}: {selectedEmployee?.idExpiry || "-"}</p>
+              </div>
+              <div className="p-3 rounded-lg border bg-muted/5">
+                <p className="text-xs text-muted-foreground">{t("passport_number")}</p>
+                <p className="font-medium">{selectedEmployee?.passportNumber || "-"}</p>
+                <p className="text-[10px] text-muted-foreground">{t("expiry")}: {selectedEmployee?.passportExpiry || "-"}</p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <h4 className="font-medium mb-2">{t("attendance_summary")}</h4>
             <div className="grid grid-cols-3 gap-2 text-sm">

@@ -19,6 +19,10 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/ui/dropdown-menu";
 import type { Device } from "@/types/api";
+import {
+  formatDeviceDate,
+  formatDeviceRelativeTime,
+} from "@/features/devices/lib/device-time";
 
 interface DeviceGridViewProps {
   devices: Device[];
@@ -37,7 +41,8 @@ export function DeviceGridView({
   onSync,
   canManage,
 }: DeviceGridViewProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === "ar" ? "ar" : "en-US";
 
   const StatusDot = ({ status }: { status: string }) => {
     const online = status === "online";
@@ -58,9 +63,22 @@ export function DeviceGridView({
           <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
               <StatusDot status={device.status} />
+              <Badge
+                variant={device.status === "online" ? "success" : "destructive"}
+                className="text-[10px] uppercase font-bold tracking-wider"
+              >
+                {device.status === "online"
+                  ? t("online_status")
+                  : t("offline_status")}
+              </Badge>
               <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider">
                 {device.model || t("device_badge", { defaultValue: "Device" })}
               </Badge>
+              {device.departmentName && (
+                <Badge variant="outline" className="text-[10px] font-bold tracking-wider bg-primary/5">
+                  {device.departmentName}
+                </Badge>
+              )}
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -100,11 +118,13 @@ export function DeviceGridView({
           </CardHeader>
           <CardContent className="p-4 pt-4">
             <div className="space-y-4">
-              <div>
+              <div className="space-y-1">
                 <CardTitle className="text-base line-clamp-1">{device.name}</CardTitle>
-                <p className="text-xs text-muted-foreground font-mono">{device.ipAddress}:{device.port}</p>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {device.ipAddress}:{device.port}
+                </p>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-muted px-2 py-1.5 rounded">
                   <p className="text-muted-foreground mb-0.5">{t("employees")}</p>
@@ -116,13 +136,60 @@ export function DeviceGridView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {device.status === "online" ? (
-                  <Wifi className="w-3 h-3 text-emerald-500" />
-                ) : (
-                  <WifiOff className="w-3 h-3 text-destructive" />
-                )}
-                <span>{device.location || t("no_location")}</span>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">{t("status")}</span>
+                  <span className="flex items-center gap-1.5 font-medium">
+                    {device.status === "online" ? (
+                      <Wifi className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <WifiOff className="w-3 h-3 text-destructive" />
+                    )}
+                    {device.status === "online"
+                      ? t("online_status")
+                      : t("offline_status")}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-muted-foreground">{t("last_sync")}</span>
+                  <div className="text-right">
+                    <p className="font-medium">
+                      {device.lastSync
+                        ? formatDeviceDate(device.lastSync, locale)
+                        : t("never_synced")}
+                    </p>
+                    {device.lastSync && (
+                      <p className="text-[11px] text-primary">
+                        {formatDeviceRelativeTime(device.lastSync, locale)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-muted-foreground">{t("last_contact")}</span>
+                  <div className="text-right">
+                    <p className="font-medium">
+                      {device.lastSeen || device.lastHeartbeat
+                        ? formatDeviceDate(
+                            device.lastSeen || device.lastHeartbeat,
+                            locale,
+                          )
+                        : "-"}
+                    </p>
+                    {(device.lastSeen || device.lastHeartbeat) && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatDeviceRelativeTime(
+                          device.lastSeen || device.lastHeartbeat,
+                          locale,
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 border-t border-border/50">
+                  <span>{t("location")}:</span>
+                  <span className="truncate">{device.location || t("no_location")}</span>
+                </div>
               </div>
             </div>
           </CardContent>

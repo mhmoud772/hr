@@ -16,7 +16,7 @@ from .models import (
     DeviceSyncLog,
     DeviceUserMapping,
 )
-from apps.employees.models import Employee
+from apps.employees.models import Employee, Department
 
 
 class LocalizedDeviceFieldsMixin:
@@ -180,6 +180,8 @@ class DeviceSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
     policyId = serializers.PrimaryKeyRelatedField(source="policy", queryset=DevicePolicy.objects.all(), required=False, allow_null=True)
     connectionMode = serializers.CharField(source="connection_mode", required=False)
     isPrimaryEnrollment = serializers.BooleanField(source="is_primary_enrollment", required=False)
+    departmentId = serializers.PrimaryKeyRelatedField(source="department", queryset=Department.objects.all(), required=False, allow_null=True)
+    departmentName = serializers.SerializerMethodField()
 
     class Meta:
         model = Device
@@ -203,6 +205,8 @@ class DeviceSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
             "policyId",
             "connectionMode",
             "isPrimaryEnrollment",
+            "departmentId",
+            "departmentName",
         ]
 
     def validate_commKey(self, value):
@@ -210,6 +214,11 @@ class DeviceSerializer(LocalizedDeviceFieldsMixin, serializers.ModelSerializer):
 
         return encrypt_comm_key(value)
 
+    def get_departmentName(self, obj):
+        if obj.department:
+            language = self._resolve_language()
+            return obj.department.get_localized_name(language)
+        return None
     def to_representation(self, instance):
         data = super().to_representation(instance)
         language = self._resolve_language()

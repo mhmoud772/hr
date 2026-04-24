@@ -97,16 +97,25 @@ def _resolve_employee_for_log(device: Device, raw_employee_code: str):
     if not employee_code:
         return None, "", None
 
-    employee = Employee.objects.filter(employee_code=employee_code).first()
-    if employee:
-        return employee, employee.employee_code, None
-
+    # 1. Check if an exact mapping already exists
     mapping = DeviceUserMapping.objects.select_related("employee").filter(
         device=device,
         device_user_id=employee_code,
     ).first()
     if mapping:
         return mapping.employee, mapping.employee.employee_code, mapping
+
+    # 2. Check if there's an employee with the same employee_code (Smart Auto-Mapping)
+    employee = Employee.objects.filter(employee_code=employee_code).first()
+    if employee:
+        # Create a mapping automatically to speed up future lookups
+        new_mapping = DeviceUserMapping.objects.create(
+            device=device,
+            employee=employee,
+            device_user_id=employee_code
+        )
+        return employee, employee.employee_code, new_mapping
+
     return None, employee_code, None
 
 
@@ -155,12 +164,74 @@ def _process_biometric_logs(device: Device, logs: list[dict]) -> int:
     return created
 
 
-def _mark_device_seen(device: Device, *, status_value: str = "online"):
+def _mark_device_seen(device: Device, *, status_value: str = "online", request=None):
     now = timezone.now()
     device.status = status_value
     device.last_seen = now
     device.last_heartbeat = now
-    device.save(update_fields=["status", "last_seen", "last_heartbeat"])
+    
+    # Proactive Sync Logic: If device hasn't synced in 1 hour, trigger a log fetch
+    stale_sync = not device.last_sync or (now - device.last_sync) > timedelta(hours=1)
+    if status_value == "online" and stale_sync:
+        try:
+            _enqueue_command_for_device(
+                user=getattr(request, "user", None) if request else None,
+                device=device,
+                command="sync",
+                payload={"limit": None},
+                reason="Proactive auto-sync on device contact",
+                request=request,
+            )
+            device.last_sync = now  # Mark as sync requested
+        except Exception:
+            pass
+
+    device.save(update_fields=["status", "last_seen", "last_heartbeat", "last_sync"])
+
+
+def _queue_initial_adms_time_sync(device: Device, request=None):
+    """
+    Queue an initial time sync for a newly linked ADMS device.
+
+    We only do this once per device, on the first successful contact,
+    so we don't spam the ADMS queue on every heartbeat.
+    """
+    mode = str(getattr(device, "connection_mode", "") or "").strip().lower()
+    if mode != "adms":
+        return
+
+    policy = getattr(device, "policy", None)
+    if policy is not None and not bool(getattr(policy, "auto_sync_time", False)):
+        return
+
+    if device.last_sync:
+        return
+
+    if DeviceSyncLog.objects.filter(device=device, command="sync_time").exists():
+        return
+
+    timezone_name = (
+        str(getattr(policy, "timezone", "") or "").strip()
+        or str(getattr(settings, "DEVICE_SYNC_TIME_ZONE", "") or "").strip()
+        or str(getattr(settings, "TIME_ZONE", "") or "").strip()
+    )
+    payload = {"timezone": timezone_name} if timezone_name else {}
+
+    try:
+        _enqueue_command_for_device(
+            user=getattr(request, "user", None) if request else None,
+            device=device,
+            command="sync_time",
+            payload=payload,
+            reason="Initial time sync after ADMS registration",
+            request=request,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to queue initial ADMS time sync for device %s: %s",
+            getattr(device, "serial_number", ""),
+            exc,
+        )
 
 
 def _is_sensitive_device_operator(user) -> bool:
@@ -314,6 +385,19 @@ class DeviceViewSet(viewsets.ModelViewSet):
             timeout_seconds = int(getattr(settings, "DEVICE_HEARTBEAT_TIMEOUT_SECONDS", 180) or 180)
             stale_cutoff = timezone.now() - timedelta(seconds=timeout_seconds)
             for device in self.get_queryset():
+                mode = str(device.connection_mode or "sdk").strip().lower()
+                contact_at = device.last_heartbeat or device.last_seen
+
+                if mode == "adms":
+                    if contact_at and contact_at >= stale_cutoff:
+                        if device.status != "online":
+                            device.status = "online"
+                            device.save(update_fields=["status"])
+                    elif device.status != "offline":
+                        device.status = "offline"
+                        device.save(update_fields=["status"])
+                    continue
+
                 if device.last_heartbeat and device.last_heartbeat < stale_cutoff:
                     if device.status != "offline":
                         device.status = "offline"
@@ -420,7 +504,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         if not isinstance(logs, list):
             return Response({"detail": "logs must be a list."}, status=status.HTTP_400_BAD_REQUEST)
         created = _process_biometric_logs(device, logs)
-        _mark_device_seen(device)
+        _mark_device_seen(device, request=request)
         return Response({"status": "ok", "created": created})
 
     @action(detail=False, methods=["post"], url_path="bulk-command")
@@ -568,7 +652,8 @@ class ADMSCDataView(APIView):
         if not device:
             return None, Response("Not Found", status=status.HTTP_404_NOT_FOUND)
 
-        _mark_device_seen(device)
+        _mark_device_seen(device, request=request)
+        _queue_initial_adms_time_sync(device, request=request)
         return device, None
 
     @extend_schema(
@@ -620,7 +705,7 @@ class ADMSGetRequestView(APIView):
         if not device:
             return HttpResponse("Not Found", status=status.HTTP_404_NOT_FOUND)
 
-        _mark_device_seen(device)
+        _mark_device_seen(device, request=request)
         item = pop_adms_command(device_id=device.id)
         if not item:
             return HttpResponse("OK")
@@ -633,4 +718,7 @@ class ADMSGetRequestView(APIView):
                 log.message = "Delivered to ADMS device."
                 log.finished_at = timezone.now()
                 log.save(update_fields=["status", "message", "finished_at"])
+        if str(item.get("command") or "").strip().lower() == "sync_time":
+            device.last_sync = timezone.now()
+            device.save(update_fields=["last_sync"])
         return HttpResponse(item.get("commandText") or "OK")

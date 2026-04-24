@@ -82,6 +82,7 @@ class Device(models.Model):
     last_seen = models.DateTimeField(null=True, blank=True)
     last_heartbeat = models.DateTimeField(null=True, blank=True)
     group = models.ForeignKey(DeviceGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
+    department = models.ForeignKey("employees.Department", null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
     policy = models.ForeignKey(DevicePolicy, null=True, blank=True, on_delete=models.SET_NULL, related_name="devices")
     connection_mode = models.CharField(max_length=20, choices=CONNECTION_MODE_CHOICES, default="sdk")
     is_primary_enrollment = models.BooleanField(default=False)

@@ -20,6 +20,8 @@ export interface Device {
   employeeCount?: number;
   groupId?: ID | null;
   policyId?: ID | null;
+  departmentId?: ID | null;
+  departmentName?: string;
   connectionMode?: "sdk" | "adms";
   primaryEnrollment?: boolean;
 }

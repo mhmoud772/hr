@@ -74,6 +74,7 @@ export function EmployeeTable({
       <TableHeader>
         <TableRow>
           <TableHead className="text-right">{t("employee_id")}</TableHead>
+          <TableHead className="text-right">{t("employee_code", { defaultValue: "Code" })}</TableHead>
           <TableHead className="text-right">{t("name")}</TableHead>
           <TableHead className="text-right">{t("department")}</TableHead>
           <TableHead className="text-right">{t("job_title")}</TableHead>
@@ -88,6 +89,7 @@ export function EmployeeTable({
           return (
             <TableRow key={employee.id}>
               <TableCell className="font-medium">{employee.id}</TableCell>
+              <TableCell className="font-mono text-xs">{employee.employeeCode || "-"}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-3">
                   <Avatar className="w-8 h-8">

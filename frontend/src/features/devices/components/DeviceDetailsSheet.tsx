@@ -31,6 +31,10 @@ import type { Device, DeviceSyncLog } from "@/types/api";
 import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/hooks/use-toast";
 import {
+  formatDeviceDate,
+  formatDeviceRelativeTime,
+} from "@/features/devices/lib/device-time";
+import {
   usePullDeviceLogs,
   usePushEmployeeToDevice,
   useRebootDevice,
@@ -83,6 +87,7 @@ export function DeviceDetailsSheet({
     permissionSet.has("devices.manage_sensitive") ||
     permissionSet.has("devices.reboot")
   );
+  const locale = i18n.language === "ar" ? "ar" : "en-US";
 
   const extractErrorMessage = (error: unknown) => {
     const apiError = error as AxiosError<{ detail?: string; error?: string }>;
@@ -107,52 +112,6 @@ export function DeviceDetailsSheet({
       .then(setSyncLogs)
       .catch(() => setSyncLogs([]));
   }, [open, device?.id]);
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return "-";
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleString(i18n.language === "ar" ? "ar-SA" : "en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const getTimeSince = (dateStr?: string) => {
-    if (!dateStr) return "";
-    try {
-      const date = new Date(dateStr);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMins / 60);
-      const diffDays = Math.floor(diffHours / 24);
-
-      if (diffMins < 1) return t("just_now", { defaultValue: "Just now" });
-      if (diffMins < 60)
-        return t("minutes_ago", {
-          defaultValue: "{{count}} min ago",
-          count: diffMins,
-        });
-      if (diffHours < 24)
-        return t("hours_ago", {
-          defaultValue: "{{count}} hours ago",
-          count: diffHours,
-        });
-      return t("days_ago", {
-        defaultValue: "{{count}} days ago",
-        count: diffDays,
-      });
-    } catch {
-      return "";
-    }
-  };
 
   const maskCommKey = (key?: string) => {
     if (!key) return "-";
@@ -221,6 +180,7 @@ export function DeviceDetailsSheet({
   if (!device) return null;
 
   const isOnline = device.status === "online";
+  const lastContactValue = device.lastSeen || device.lastHeartbeat;
   const recentLogs = syncLogs.slice(0, 6);
 
   return (
@@ -278,27 +238,37 @@ export function DeviceDetailsSheet({
                   {isOnline ? t("online") : t("offline")}
                 </span>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                {lastContactValue
+                  ? `${t("last_contact")}: ${formatDeviceRelativeTime(lastContactValue, locale)}`
+                  : t("no_data", { defaultValue: "No data available" })}
+              </p>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
               <span className="text-xs text-muted-foreground block mb-1">
                 {t("last_sync", { defaultValue: "Last Sync" })}
               </span>
               <div className="font-medium text-sm truncate">
-                {formatDate(device.lastSync)}
+                {device.lastSync ? formatDeviceDate(device.lastSync, locale) : t("never_synced")}
               </div>
               {device.lastSync && (
                 <span className="text-xs text-muted-foreground">
-                  {getTimeSince(device.lastSync)}
+                  {formatDeviceRelativeTime(device.lastSync, locale)}
                 </span>
               )}
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
               <span className="text-xs text-muted-foreground block mb-1">
-                {t("employee_count", { defaultValue: "Employees" })}
+                {t("last_contact")}
               </span>
-              <span className="text-2xl font-bold leading-none">
-                {device.employeeCount || 0}
-              </span>
+              <div className="font-medium text-sm truncate">
+                {lastContactValue ? formatDeviceDate(lastContactValue, locale) : "-"}
+              </div>
+              {lastContactValue && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDeviceRelativeTime(lastContactValue, locale)}
+                </span>
+              )}
             </div>
           </section>
 
@@ -345,6 +315,24 @@ export function DeviceDetailsSheet({
                   <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                   <span className="font-medium">{device.location}</span>
                 </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 sm:col-span-2">
+                <span className="text-xs text-muted-foreground block mb-1">
+                  {t("department", { defaultValue: "Department" })}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-primary/5">
+                    {device.departmentName || "-"}
+                  </Badge>
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <span className="text-xs text-muted-foreground block mb-1">
+                  {t("employee_count", { defaultValue: "Employees" })}
+                </span>
+                <span className="text-2xl font-bold leading-none">
+                  {device.employeeCount || 0}
+                </span>
               </div>
             </div>
           </section>
@@ -399,86 +387,6 @@ export function DeviceDetailsSheet({
                       <Eye className="w-3 h-3" />
                     )}
                   </Button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <Separator />
-
-          {/* Status & Sync Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Activity className="w-4 h-4 text-primary" />
-              <h3 className="font-semibold text-sm">
-                {t("status_sync", { defaultValue: "Status & Sync" })}
-              </h3>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                <span className="text-xs text-muted-foreground block mb-1">
-                  {t("employee_count", { defaultValue: "Employees" })}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">
-                    {device.employeeCount || 0}
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
-                <span className="text-xs text-muted-foreground block mb-1">
-                  {t("last_sync", { defaultValue: "Last Sync" })}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Clock3 className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div>
-                    <div className="font-medium">
-                      {formatDate(device.lastSync)}
-                    </div>
-                    {device.lastSync && (
-                      <span className="text-xs text-primary">
-                        {getTimeSince(device.lastSync)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 sm:col-span-2">
-                <span className="text-xs text-muted-foreground block mb-1">
-                  {t("last_seen", { defaultValue: "Last Seen" })}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Wifi
-                    className={`w-4 h-4 ${isOnline ? "text-success" : "text-muted-foreground"} shrink-0`}
-                  />
-                  <div>
-                    <div className="font-medium">
-                      {formatDate(device.lastSeen)}
-                    </div>
-                    {device.lastSeen && (
-                      <span
-                        className={`text-xs ${isOnline ? "text-success" : "text-muted-foreground"}`}
-                      >
-                        {getTimeSince(device.lastSeen)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 sm:col-span-2">
-                <span className="text-xs text-muted-foreground block mb-1">
-                  {t("last_heartbeat", { defaultValue: "Last Heartbeat" })}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Activity className={`w-4 h-4 ${isOnline ? "text-success" : "text-muted-foreground"} shrink-0`} />
-                  <div>
-                    <div className="font-medium">{formatDate(device.lastHeartbeat)}</div>
-                    {device.lastHeartbeat && (
-                      <span className={`text-xs ${isOnline ? "text-success" : "text-muted-foreground"}`}>
-                        {getTimeSince(device.lastHeartbeat)}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
@@ -615,7 +523,7 @@ export function DeviceDetailsSheet({
                             </p>
                           )}
                           <p className="text-[11px] text-muted-foreground">
-                            {formatDate(log.finished_at || log.started_at)}
+                            {formatDeviceDate(log.finished_at || log.started_at, locale)}
                           </p>
                         </div>
                         <Badge

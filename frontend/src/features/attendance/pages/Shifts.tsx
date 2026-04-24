@@ -26,10 +26,21 @@ import { useToast } from "@/shared/hooks/use-toast";
 // ── Zod Schema ──────────────────────────────────────────────────
 const shiftSchema = z.object({
   name: z.string().min(2, "shift_name_min"),
+  name_en: z.string().optional(),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, "time_format_invalid"),
   end_time: z.string().regex(/^\d{2}:\d{2}$/, "time_format_invalid"),
   grace_period_minutes: z.coerce.number().min(0).max(120),
+  break_duration_minutes: z.coerce.number().min(0).max(120).default(0),
+  is_overnight: z.boolean().default(false),
+  working_sun: z.boolean().default(true),
+  working_mon: z.boolean().default(true),
+  working_tue: z.boolean().default(true),
+  working_wed: z.boolean().default(true),
+  working_thu: z.boolean().default(true),
+  working_fri: z.boolean().default(false),
+  working_sat: z.boolean().default(false),
   description: z.string().optional(),
+  description_en: z.string().optional(),
 }).refine(d => d.start_time !== d.end_time, {
   message: "times_same_error",
   path: ["end_time"],
@@ -55,10 +66,21 @@ function ShiftFormDialog({
     resolver: zodResolver(shiftSchema),
     defaultValues: {
       name: shift?.name ?? "",
+      name_en: shift?.name_en ?? "",
       start_time: shift?.start_time ?? "08:00",
       end_time: shift?.end_time ?? "16:00",
       grace_period_minutes: shift?.grace_period_minutes ?? 15,
+      break_duration_minutes: shift?.break_duration_minutes ?? 0,
+      is_overnight: shift?.is_overnight ?? false,
+      working_sun: shift?.working_sun ?? true,
+      working_mon: shift?.working_mon ?? true,
+      working_tue: shift?.working_tue ?? true,
+      working_wed: shift?.working_wed ?? true,
+      working_thu: shift?.working_thu ?? true,
+      working_fri: shift?.working_fri ?? false,
+      working_sat: shift?.working_sat ?? false,
       description: shift?.description ?? "",
+      description_en: shift?.description_en ?? "",
     },
   });
 
@@ -88,6 +110,10 @@ function ShiftFormDialog({
             {errors.name && <p className="text-xs text-destructive">{t(errors.name.message as string)}</p>}
           </div>
 
+          <div className="space-y-1">
+            <Label htmlFor="shift-name-en">{t("shift_name_en", { defaultValue: "Shift Name (English)" })}</Label>
+            <Input id="shift-name-en" {...register("name_en")} placeholder="Morning Shift" />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor="start-time">{t("start_time")} *</Label>
@@ -101,17 +127,64 @@ function ShiftFormDialog({
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="grace-period">{t("grace_period_minutes")}</Label>
-            <Input id="grace-period" type="number" min={0} max={120} {...register("grace_period_minutes")} />
-            {errors.grace_period_minutes && (
-              <p className="text-xs text-destructive">{t(errors.grace_period_minutes.message as string)}</p>
-            )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="grace-period">{t("grace_period_minutes")}</Label>
+              <Input id="grace-period" type="number" min={0} max={120} {...register("grace_period_minutes")} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="break-duration">{t("break_duration_minutes", { defaultValue: "Break Duration (min)" })}</Label>
+              <Input id="break-duration" type="number" min={0} max={120} {...register("break_duration_minutes")} />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="description">{t("description")}</Label>
-            <Input id="description" {...register("description")} placeholder={t("description")} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="description">{t("description")}</Label>
+              <Input id="description" {...register("description")} placeholder={t("description")} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="description-en">{t("description_en", { defaultValue: "Description (EN)" })}</Label>
+              <Input id="description-en" {...register("description_en")} placeholder="Description" />
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 space-x-reverse py-2">
+            <input
+              type="checkbox"
+              id="is_overnight"
+              {...register("is_overnight")}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <Label htmlFor="is_overnight" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              {t("is_overnight")}
+              <p className="text-[10px] text-muted-foreground font-normal">{t("overnight_shift_hint")}</p>
+            </Label>
+          </div>
+
+          <div className="space-y-3 border rounded-lg p-3 bg-muted/20">
+            <Label className="text-xs font-semibold text-primary uppercase tracking-wider">{t("workdays_config")}</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { id: "working_sun", label: t("working_sun") },
+                { id: "working_mon", label: t("working_mon") },
+                { id: "working_tue", label: t("working_tue") },
+                { id: "working_wed", label: t("working_wed") },
+                { id: "working_thu", label: t("working_thu") },
+                { id: "working_fri", label: t("working_fri") },
+                { id: "working_sat", label: t("working_sat") },
+              ].map((day) => (
+                <div key={day.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id={day.id}
+                    {...register(day.id as any)}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor={day.id} className="text-xs cursor-pointer">{day.label}</Label>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
