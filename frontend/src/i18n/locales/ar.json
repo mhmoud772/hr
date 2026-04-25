@@ -1278,5 +1278,22 @@
   "ai_feature_allow_fallback": "السماح بالردود البديلة",
   "ai_feature_allow_fallback_desc": "إرجاع ردود بديلة موثقة عند تعذر الوصول إلى المزود الحي.",
   "ai_access_roles": "أدوار الوصول",
-  "ai_access_roles_desc": "حدد الأدوار التي يمكنها الوصول إلى ميزات الذكاء الاصطناعي داخل النظام."
+  "ai_access_roles_desc": "حدد الأدوار التي يمكنها الوصول إلى ميزات الذكاء الاصطناعي داخل النظام.",
+  "bank_name": "اسم البنك",
+  "bank_account": "رقم الحساب البنكي",
+  "iban": "رقم الآيبان (IBAN)",
+  "financial_information": "المعلومات المالية",
+  "emergency_contact": "جهة الاتصال في حالات الطوارئ",
+  "emergency_contact_name": "اسم جهة الاتصال",
+  "emergency_contact_phone": "رقم هاتف الطوارئ",
+  "emergency_contact_relation": "صلة القرابة",
+  "identity_and_travel": "الهوية والسفر",
+  "id_document_number": "رقم الهوية / الإقامة",
+  "id_document_expiry": "تاريخ انتهاء الهوية",
+  "passport_number": "رقم الجواز",
+  "passport_expiry": "تاريخ انتهاء الجواز",
+  "break_duration": "مدة الاستراحة",
+  "break_duration_minutes": "مدة الاستراحة (دقائق)",
+  "personal_details": "البيانات الشخصية",
+  "additional_details": "بيانات إضافية"
 }

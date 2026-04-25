@@ -98,6 +98,16 @@ export function EmployeeForm({
     address: z.string().optional(),
     salary: z.string().optional(),
     contractStatus: z.enum(["permanent", "contract", "probation", "terminated"]),
+    bankName: z.string().optional(),
+    bankAccount: z.string().optional(),
+    iban: z.string().optional(),
+    emergencyContactName: z.string().optional(),
+    emergencyContactPhone: z.string().optional(),
+    emergencyContactRelation: z.string().optional(),
+    idDocumentNumber: z.string().optional(),
+    idDocumentExpiry: z.string().optional(),
+    passportNumber: z.string().optional(),
+    passportExpiry: z.string().optional(),
   }).superRefine(async (data, ctx) => {
       if (data.employeeId) {
           try {
@@ -147,6 +157,16 @@ export function EmployeeForm({
       address: "",
       salary: "",
       contractStatus: "permanent",
+      bankName: "",
+      bankAccount: "",
+      iban: "",
+      emergencyContactName: "",
+      emergencyContactPhone: "",
+      emergencyContactRelation: "",
+      idDocumentNumber: "",
+      idDocumentExpiry: "",
+      passportNumber: "",
+      passportExpiry: "",
     },
   });
 
@@ -170,6 +190,16 @@ export function EmployeeForm({
         address: employee.address || "",
         salary: employee.salary ? String(employee.salary) : "",
         contractStatus: employee.contractStatus || "permanent",
+        bankName: employee.bankName || "",
+        bankAccount: employee.bankAccount || "",
+        iban: employee.iban || "",
+        emergencyContactName: employee.emergencyContactName || "",
+        emergencyContactPhone: employee.emergencyContactPhone || "",
+        emergencyContactRelation: employee.emergencyContactRelation || "",
+        idDocumentNumber: employee.idDocumentNumber || "",
+        idDocumentExpiry: employee.idDocumentExpiry || "",
+        passportNumber: employee.passportNumber || "",
+        passportExpiry: employee.passportExpiry || "",
       });
       setAvatarPreview(employee.avatarUrl || null);
       setAvatarFile(null);
@@ -189,6 +219,16 @@ export function EmployeeForm({
         address: employeeDraft?.address || "",
         salary: employeeDraft?.salary?.toString() || "",
         contractStatus: (employeeDraft?.contractStatus as any) || "permanent",
+        bankName: employeeDraft?.bankName || "",
+        bankAccount: employeeDraft?.bankAccount || "",
+        iban: employeeDraft?.iban || "",
+        emergencyContactName: employeeDraft?.emergencyContactName || "",
+        emergencyContactPhone: employeeDraft?.emergencyContactPhone || "",
+        emergencyContactRelation: employeeDraft?.emergencyContactRelation || "",
+        idDocumentNumber: employeeDraft?.idDocumentNumber || "",
+        idDocumentExpiry: employeeDraft?.idDocumentExpiry || "",
+        passportNumber: employeeDraft?.passportNumber || "",
+        passportExpiry: employeeDraft?.passportExpiry || "",
       });
       setAvatarPreview(null);
       setAvatarFile(null);
@@ -213,6 +253,8 @@ export function EmployeeForm({
     const normalizedJobTitleId = extractId(rest.jobTitle);
     const normalizedHireDate = rest.hireDate?.trim() ? rest.hireDate : undefined;
     const normalizedBirthDate = rest.birthDate?.trim() ? rest.birthDate : undefined;
+    const normalizedIdExpiry = rest.idDocumentExpiry?.trim() ? rest.idDocumentExpiry : undefined;
+    const normalizedPassportExpiry = rest.passportExpiry?.trim() ? rest.passportExpiry : undefined;
     
     onSave(
       {
@@ -222,6 +264,8 @@ export function EmployeeForm({
         jobTitleId: normalizedJobTitleId ? String(normalizedJobTitleId) : null,
         hireDate: normalizedHireDate,
         birthDate: normalizedBirthDate,
+        idDocumentExpiry: normalizedIdExpiry,
+        passportExpiry: normalizedPassportExpiry,
         salary: rest.salary ? Number(rest.salary) : undefined,
       },
       avatarFile,
@@ -404,9 +448,9 @@ export function EmployeeForm({
               />
             </div>
 
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="multiple" className="w-full space-y-4">
               <AccordionItem value="additional-details" className="border-none bg-muted/20 rounded-2xl px-4 py-1">
-                <AccordionTrigger className="text-sm font-bold hover:no-underline">{t("additional_details")}</AccordionTrigger>
+                <AccordionTrigger className="text-sm font-bold hover:no-underline">{t("personal_details", "Personal Details")}</AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-6 pt-4 pb-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -489,6 +533,168 @@ export function EmployeeForm({
                         </FormItem>
                       )}
                     />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="financial-info" className="border-none bg-muted/20 rounded-2xl px-4 py-1">
+                <AccordionTrigger className="text-sm font-bold hover:no-underline">{t("financial_information")}</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-6 pt-4 pb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="bankName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("bank_name")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="bankAccount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("bank_account")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="iban"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-bold">{t("iban")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="emergency-contact" className="border-none bg-muted/20 rounded-2xl px-4 py-1">
+                <AccordionTrigger className="text-sm font-bold hover:no-underline">{t("emergency_contact")}</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-6 pt-4 pb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="emergencyContactName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("emergency_contact_name")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="emergencyContactPhone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("emergency_contact_phone")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="emergencyContactRelation"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-bold">{t("emergency_contact_relation")}</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="legal-docs" className="border-none bg-muted/20 rounded-2xl px-4 py-1">
+                <AccordionTrigger className="text-sm font-bold hover:no-underline">{t("identity_and_travel", "Identity & Travel")}</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-6 pt-4 pb-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="idDocumentNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("id_document_number")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="idDocumentExpiry"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("id_document_expiry")}</FormLabel>
+                            <FormControl>
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="passportNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("passport_number")}</FormLabel>
+                            <FormControl>
+                              <Input {...field} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="passportExpiry"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm font-bold">{t("passport_expiry")}</FormLabel>
+                            <FormControl>
+                              <DatePicker value={field.value} onChange={field.onChange} disabled={field.disabled} className="h-11 rounded-xl bg-background border-border/50" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>

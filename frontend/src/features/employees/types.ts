@@ -22,6 +22,22 @@ export interface Employee {
   contractStatus?: ContractStatus;
   avatar?: string;
   avatarUrl?: string;
+  
+  // Financial Information
+  bankName?: string;
+  bankAccount?: string;
+  iban?: string;
+  
+  // Emergency Contact
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelation?: string;
+  
+  // Legal Documents
+  idDocumentNumber?: string;
+  idDocumentExpiry?: ISODate;
+  passportNumber?: string;
+  passportExpiry?: ISODate;
 }
 
 export interface EmployeeDocument {

@@ -65,6 +65,22 @@ class Employee(models.Model):
         ("terminated", "Terminated"),
     )
     contract_status = models.CharField(max_length=20, choices=CONTRACT_CHOICES, default="permanent")
+    
+    # Financial Information
+    bank_name = models.CharField(max_length=100, blank=True)
+    bank_account = models.CharField(max_length=100, blank=True)
+    iban = models.CharField(max_length=100, blank=True)
+    
+    # Emergency Contact
+    emergency_contact_name = models.CharField(max_length=255, blank=True)
+    emergency_contact_phone = models.CharField(max_length=50, blank=True)
+    emergency_contact_relation = models.CharField(max_length=100, blank=True)
+    
+    # Legal Documents
+    id_document_number = models.CharField(max_length=100, blank=True)
+    id_document_expiry = models.DateField(null=True, blank=True)
+    passport_number = models.CharField(max_length=100, blank=True)
+    passport_expiry = models.DateField(null=True, blank=True)
 
     class Meta:
         indexes = [

@@ -76,13 +76,43 @@ class EmployeeSerializer(LocalizedFieldsMixin, serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         mutable_data = dict(data)
-        if "employeeCode" in mutable_data and "employee_code" not in mutable_data:
-            mutable_data["employee_code"] = mutable_data["employeeCode"]
+        # Handle camelCase mappings from frontend
+        mappings = {
+            "employeeCode": "employee_code",
+            "bankName": "bank_name",
+            "bankAccount": "bank_account",
+            "emergencyContactName": "emergency_contact_name",
+            "emergencyContactPhone": "emergency_contact_phone",
+            "emergencyContactRelation": "emergency_contact_relation",
+            "idDocumentNumber": "id_document_number",
+            "idDocumentExpiry": "id_document_expiry",
+            "passportNumber": "passport_number",
+            "passportExpiry": "passport_expiry",
+        }
+        for camel, snake in mappings.items():
+            if camel in mutable_data and snake not in mutable_data:
+                mutable_data[snake] = mutable_data[camel]
+        
         return super().to_internal_value(mutable_data)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        data["employeeCode"] = data.get("employee_code")
+        # Add camelCase versions for frontend
+        mappings = {
+            "employee_code": "employeeCode",
+            "bank_name": "bankName",
+            "bank_account": "bankAccount",
+            "emergency_contact_name": "emergencyContactName",
+            "emergency_contact_phone": "emergencyContactPhone",
+            "emergency_contact_relation": "emergencyContactRelation",
+            "id_document_number": "idDocumentNumber",
+            "id_document_expiry": "idDocumentExpiry",
+            "passport_number": "passportNumber",
+            "passport_expiry": "passportExpiry",
+        }
+        for snake, camel in mappings.items():
+            if snake in data:
+                data[camel] = data[snake]
         return data
 
 class EmployeeDocumentSerializer(LocalizedFieldsMixin, serializers.ModelSerializer):

@@ -1258,5 +1258,22 @@
   "ai_feature_allow_fallback": "Allow fallback responses",
   "ai_feature_allow_fallback_desc": "Return grounded fallback responses when the live provider is unavailable.",
   "ai_access_roles": "Access roles",
-  "ai_access_roles_desc": "Choose which roles can access AI features in the application."
+  "ai_access_roles_desc": "Choose which roles can access AI features in the application.",
+  "bank_name": "Bank Name",
+  "bank_account": "Bank Account Number",
+  "iban": "IBAN Number",
+  "financial_information": "Financial Information",
+  "emergency_contact": "Emergency Contact",
+  "emergency_contact_name": "Contact Person Name",
+  "emergency_contact_phone": "Emergency Phone",
+  "emergency_contact_relation": "Relationship",
+  "identity_and_travel": "Identity & Travel",
+  "id_document_number": "ID / Residency Number",
+  "id_document_expiry": "ID Expiry Date",
+  "passport_number": "Passport Number",
+  "passport_expiry": "Passport Expiry Date",
+  "break_duration": "Break Duration",
+  "break_duration_minutes": "Break Duration (min)",
+  "personal_details": "Personal Details",
+  "additional_details": "Additional Details"
 }

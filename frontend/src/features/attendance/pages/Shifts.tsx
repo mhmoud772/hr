@@ -308,6 +308,7 @@ export default function Shifts() {
                 <TableHead>{t("shift_start")}</TableHead>
                 <TableHead>{t("shift_end")}</TableHead>
                 <TableHead>{t("grace_period")}</TableHead>
+                <TableHead>{t("break_duration")}</TableHead>
                 <TableHead>{t("description")}</TableHead>
                 <TableHead className="w-[100px] text-center">{t("actions")}</TableHead>
               </TableRow>
@@ -316,34 +317,52 @@ export default function Shifts() {
               {shifts?.map((shift) => (
                 <TableRow key={shift.id}>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-medium">{shift.name}</span>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-primary/70" />
+                        <span className="font-bold text-foreground">
+                          {i18n.language === "ar" ? shift.name : (shift.name_en || shift.name)}
+                        </span>
+                      </div>
+                      {i18n.language !== "ar" && shift.name !== shift.name_en && (
+                        <span className="text-[10px] text-muted-foreground mr-6 rtl:ml-6">{shift.name}</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                    <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200">
                       {shift.start_time}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-orange-600 border-orange-300">
+                    <Badge variant="secondary" className="bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200">
                       {shift.end_time}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-muted-foreground">{shift.grace_period_minutes ?? 0} {t("minutes")}</span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{shift.grace_period_minutes ?? 0} {t("min")}</span>
+                      <span className="text-[10px] text-muted-foreground">{t("grace_period")}</span>
+                    </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {shift.description || t("no_description", "—")}
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{shift.break_duration_minutes ?? 0} {t("min")}</span>
+                      <span className="text-[10px] text-muted-foreground">{t("break_duration")}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <p className="text-muted-foreground text-sm truncate" title={shift.description}>
+                      {shift.description || "—"}
+                    </p>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-center">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(shift)}>
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(shift)} className="hover:bg-primary/10 hover:text-primary">
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(shift)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(shift)} className="hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
