@@ -26,7 +26,7 @@ export function PulseCard({ data, isLoading }: PulseCardProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === "ar" ? ar : enUS;
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <Card className="border border-border/60 shadow-sm overflow-hidden h-full animate-pulse">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
