@@ -86,42 +86,55 @@ class DashboardPulseView(APIView):
 
     @extend_schema(responses={200: DashboardPulseResponseSerializer})
     def get(self, request):
-        now = timezone.now()
-        today = now.date()
-        language = request.headers.get("Accept-Language")
+        try:
+            now = timezone.now()
+            today = now.date()
+            language = request.headers.get("Accept-Language")
 
-        currently_checked_in = Attendance.objects.filter(
-            date=today,
-            check_in__isnull=False,
-            check_out__isnull=True,
-        ).count()
+            currently_checked_in = Attendance.objects.filter(
+                date=today,
+                check_in__isnull=False,
+                check_out__isnull=True,
+            ).count()
 
-        online_devices = Device.objects.filter(status="online").count()
-        total_devices = Device.objects.count()
+            online_devices = Device.objects.filter(status="online").count()
+            total_devices = Device.objects.count()
 
-        latest_logs = BiometricLog.objects.select_related("device").order_by("-timestamp")[:5]
-        logs_data = [
-            {
-                "employee_code": log.employee_code,
-                "device": log.device.get_localized_name(language),
-                "timestamp": log.timestamp.isoformat(),
-                "action": log.action,
+            latest_logs = BiometricLog.objects.select_related("device").order_by("-timestamp")[:5]
+            logs_data = []
+            for log in latest_logs:
+                device_name = "Unknown Device"
+                if log.device:
+                    try:
+                        device_name = log.device.get_localized_name(language)
+                    except Exception:
+                        device_name = log.device.name or "Unnamed Device"
+                
+                logs_data.append({
+                    "employee_code": log.employee_code,
+                    "device": device_name,
+                    "timestamp": log.timestamp.isoformat() if log.timestamp else now.isoformat(),
+                    "action": log.action,
+                })
+
+            last_sync = DeviceSyncLog.objects.filter(status="success").order_by("-finished_at").first()
+
+            data = {
+                "currentlyCheckedIn": currently_checked_in,
+                "deviceStatus": {
+                    "online": online_devices,
+                    "total": total_devices,
+                },
+                "latestLogs": logs_data,
+                "lastSync": last_sync.finished_at.isoformat() if last_sync and last_sync.finished_at else None,
             }
-            for log in latest_logs
-        ]
-
-        last_sync = DeviceSyncLog.objects.filter(status="success").order_by("-finished_at").first()
-
-        data = {
-            "currentlyCheckedIn": currently_checked_in,
-            "deviceStatus": {
-                "online": online_devices,
-                "total": total_devices,
-            },
-            "latestLogs": logs_data,
-            "lastSync": last_sync.finished_at.isoformat() if last_sync and last_sync.finished_at else None,
-        }
-        return Response(data)
+            return Response(data)
+        except Exception as e:
+            logger.exception("Error in DashboardPulseView")
+            return Response(
+                {"detail": "Internal server error in dashboard pulse.", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SystemMonitorView(APIView):
